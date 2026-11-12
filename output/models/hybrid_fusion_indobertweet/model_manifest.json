@@ -1,0 +1,213 @@
+{
+  "model_architecture": "Hybrid Dual-Stream Gated Fusion (6-Head MTL)",
+  "pretrained_model": "indobenchmark/indobert-base-p1",
+  "model_version": "2.0.0",
+  "dataset_version": "iicd-curated-cfa1f94321d2",
+  "target_source": "pseudo_labeled_llm",
+  "training_date": "2026-11-12T07:12:53.666257+00:00",
+  "random_seed": 42,
+  "optimal_threshold": 0.2,
+  "threshold_selection_split": "validation",
+  "taxonomy": {
+    "cyberbullying": [
+      "YES",
+      "NO"
+    ],
+    "type": {
+      "INS": "Insult (Penghinaan)",
+      "BSH": "Body Shaming (Cercaan Fisik)",
+      "SHM": "Social Humiliation (Pelecehan Sosial)",
+      "SAR": "Sarcasm (Sarkasme / Sindiran)",
+      "THR": "Threat (Ancaman)",
+      "DIS": "Discrimination (Diskriminasi / SARA)",
+      "SEX": "Sexual Harassment (Pelecehan Seksual)",
+      "EXC": "Social Exclusion (Pengucilan Sosial)",
+      "NONE": "None / Non-Cyberbullying"
+    },
+    "emotion": {
+      "ANG": "Anger (Kemarahan)",
+      "DIS": "Disgust (Jijik / Muak)",
+      "HUM": "Humiliation (Malu / Dipermalukan)",
+      "MOCK": "Mockery (Ejekan / Olok-olok)",
+      "SAD": "Sadness (Kesedihan)",
+      "NEU": "Neutral (Netral)"
+    },
+    "cultural_context": {
+      "APP": "Appearance (Penampilan Fisik)",
+      "INT": "Intelligence (Kecerdasan / Kemampuan)",
+      "STA": "Social Status (Status Sosial / Ekonomi)",
+      "FAM": "Family Background (Latar Belakang Keluarga)",
+      "EDU": "Education (Pendidikan)",
+      "REG": "Regional Identity (Asal Daerah / Suku)",
+      "GEN": "Gender (Gender / Orientasi)",
+      "NONE": "None / Tidak Ada Konteks Kultural Spesifik"
+    },
+    "implicit_level": {
+      "E0": "Explicit (Sangat Terang-terangan)",
+      "E1": "Semi Implicit (Semi Tersirat)",
+      "E2": "Implicit (Tersirat / Kontekstual)"
+    },
+    "severity": {
+      "LOW": "Low (Rendah / Ringan)",
+      "MEDIUM": "Medium (Sedang)",
+      "HIGH": "High (Tinggi / Berat)",
+      "NONE": "None / Non-Cyberbullying"
+    }
+  },
+  "hyperparameters": {
+    "epochs_requested": 5,
+    "epochs_completed": 3,
+    "best_epoch": 1,
+    "batch_size": 16,
+    "lr_transformer": 2e-05,
+    "lr_heads": 0.0001,
+    "max_length": 128,
+    "patience": 2,
+    "modality_dropout_prob": 0.5,
+    "text_input_mode": "text_only",
+    "eval_llm_stream_masked": true
+  },
+  "evaluation_metrics": {
+    "threshold": 0.2,
+    "support": 5,
+    "accuracy": 0.8,
+    "macro_precision": 0.4,
+    "macro_recall": 0.5,
+    "macro_f1": 0.4444,
+    "weighted_precision": 0.64,
+    "weighted_recall": 0.8,
+    "weighted_f1": 0.7111,
+    "roc_auc": 0.75,
+    "pr_auc": 0.95,
+    "calibration": {
+      "ece": 0.1589,
+      "mce": 0.3201,
+      "brier_score": 0.1587,
+      "log_loss": 0.4943
+    },
+    "confidence_intervals_95": {
+      "accuracy": [
+        0.4,
+        1.0
+      ],
+      "macro_f1": [
+        0.2857,
+        1.0
+      ],
+      "roc_auc": [
+        0.25,
+        1.0
+      ],
+      "pr_auc": [
+        0.7,
+        1.0
+      ]
+    },
+    "confusion_matrix": {
+      "tn": 0,
+      "fp": 1,
+      "fn": 0,
+      "tp": 4
+    },
+    "confusion_matrix_2x2": [
+      [
+        0,
+        1
+      ],
+      [
+        0,
+        4
+      ]
+    ],
+    "per_class": {
+      "non_cyberbullying": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "support": 1
+      },
+      "cyberbullying": {
+        "precision": 0.8,
+        "recall": 1.0,
+        "f1": 0.8889,
+        "support": 4
+      }
+    },
+    "implicitness_breakdown": {
+      "E0": {
+        "count": 4,
+        "correct": 3,
+        "accuracy": 0.75,
+        "macro_f1": 0.4286
+      },
+      "E1": {
+        "count": 1,
+        "correct": 1,
+        "accuracy": 1.0,
+        "macro_f1": 1.0
+      }
+    },
+    "type_breakdown": {
+      "BSH": {
+        "count": 2,
+        "correct": 2,
+        "accuracy": 1.0
+      },
+      "INS": {
+        "count": 2,
+        "correct": 2,
+        "accuracy": 1.0
+      },
+      "NONE": {
+        "count": 1,
+        "correct": 0,
+        "accuracy": 0.0
+      }
+    },
+    "error_analysis": {
+      "false_positive_count": 1,
+      "false_negative_count": 0,
+      "false_positive_rate": 1.0,
+      "false_negative_rate": 0.0,
+      "fp_samples": [
+        {
+          "text": "Anjirr ??",
+          "prob": 0.7381,
+          "implicit_level": "E0"
+        }
+      ],
+      "fn_samples": []
+    }
+  },
+  "checkpoint_location": "/Users/harlengilbertsimanullang/Documents/Disertasi/LLM-Augmented Explainable/iicd_annotation_app/output/models/hybrid_fusion_indobertweet/best_hybrid_model.pt",
+  "git_storage_note": "Bobot biner model (.pt/.safetensors) dikecualikan dari Git melalui .gitignore; simpan secara lokal atau pada external artifact storage.",
+  "multi_task_heads_test": {
+    "type": {
+      "support": 5,
+      "accuracy": 0.4,
+      "macro_f1": 0.1905
+    },
+    "emotion": {
+      "support": 5,
+      "accuracy": 0.4,
+      "macro_f1": 0.1905
+    },
+    "cultural": {
+      "support": 5,
+      "accuracy": 0.4,
+      "macro_f1": 0.2857
+    },
+    "implicit": {
+      "support": 5,
+      "accuracy": 0.8,
+      "macro_f1": 0.4444
+    },
+    "severity": {
+      "support": 5,
+      "accuracy": 1.0,
+      "macro_f1": 1.0
+    }
+  },
+  "evaluation_mode": "leakage_free_modality_masked_student",
+  "resumable_checkpoint": "/Users/harlengilbertsimanullang/Documents/Disertasi/LLM-Augmented Explainable/iicd_annotation_app/output/models/hybrid_fusion_indobertweet/checkpoints/latest_checkpoint.pt"
+}

@@ -5,7 +5,7 @@ from pathlib import Path
 from datetime import datetime
 
 from config import DEFAULT_DATASET_PATH, CHECKPOINTS_DIR, DEFAULT_SUMOPOD_MODEL
-from data_manager.dataset_handler import load_dataset_file, detect_text_column
+from data_manager.dataset_handler import load_dataset_file, detect_text_column, validate_dataset_dataframe
 from data_manager.checkpoint_manager import save_checkpoint, load_checkpoint, get_checkpoint_filepath
 from core.model_engine import run_single_annotation, run_batch_annotation_step
 
@@ -18,7 +18,11 @@ def render_batch_annotation_page():
     is_mock = getattr(engine, "is_mock", True) if engine else True
 
     if is_mock:
-        st.warning("⚠️ Sedang berjalan dalam **Mode Simulasi / Mock Fallback**. Untuk menganotasi menggunakan LLM riil, isi **SumoPod API Key** di tab **Pengaturan & Model**.")
+        st.error(
+            "⚠️ **PERINGATAN PENELITIAN (Mode Simulasi / Mock Fallback Aktif)**: "
+            "Hasil anotasi MockEngine HANYA untuk pengujian antarmuka, DILARANG dijadikan data penelitian final "
+            "dan akan ditolak secara otomatis oleh pipeline kurasi. Isi **SumoPod API Key** di tab *Pengaturan & Model*."
+        )
     else:
         st.success(f"🌐 **SumoPod AI Gateway Aktif**: Menggunakan model `{getattr(engine, 'model_name', DEFAULT_SUMOPOD_MODEL)}` via Cloud API. Siap untuk anotasi batch!")
 
@@ -56,7 +60,7 @@ def render_batch_annotation_page():
         st.info("Silakan pilih atau unggah dataset terlebih dahulu.")
         return
 
-    # 2. Text Column Selection
+    # 2. Text Column Selection & Validation
     detected_col = detect_text_column(df_raw)
     col_idx = list(df_raw.columns).index(detected_col) if detected_col in df_raw.columns else 0
     text_column = st.selectbox(
@@ -65,6 +69,13 @@ def render_batch_annotation_page():
         index=col_idx,
         help="Kolom ini akan diekstrak dan dikirim ke model untuk dianotasi."
     )
+    is_valid_df, val_warnings, val_errors = validate_dataset_dataframe(df_raw, text_col=text_column)
+    for w in val_warnings:
+        st.warning(f"⚠️ Validasi Dataset: {w}")
+    if not is_valid_df:
+        for err_msg in val_errors:
+            st.error(f"❌ Validasi Dataset Gagal: {err_msg}")
+        return
 
     # 3. Check for Existing Checkpoint
     checkpoint_file = get_checkpoint_filepath(dataset_name)
@@ -160,8 +171,9 @@ def render_batch_annotation_page():
 
     if start_btn:
         annotation_cols = [
-            "cyberbullying", "type", "emotion", "cultural_context", 
-            "implicit_level", "severity", "confidence", "explanation", "error"
+            "cyberbullying", "type", "emotion", "cultural_context",
+            "implicit_level", "severity", "confidence", "explanation", "error",
+            "llm_model", "prompt_version", "annotated_at", "annotation_source", "is_mock"
         ]
         for col in annotation_cols:
             if col not in annotated_df.columns:
@@ -264,15 +276,21 @@ def render_batch_annotation_page():
                 time.sleep(cooldown_delay)
 
         # Finished
-        total_time = time.time() - start_time
+        total_time = max(time.time() - start_time, 1e-4)
         save_checkpoint(annotated_df, dataset_name=dataset_name)
         st.session_state["latest_batch_df"] = annotated_df
-        
-        st.success(
-            f"🎉 Selesai! Berhasil memproses **{total_to_run}** baris dalam **{total_time:.1f}** detik "
-            f"(Rata-rata: {total_to_run / total_time:.2f} sampel/detik | Sukses: {success_count}, Error: {error_count}). "
-            f"Checkpoint tersimpan di `{checkpoint_file.name}`."
-        )
+
+        if is_mock:
+            st.warning(
+                f"🧪 Simulasi Batch Selesai ({total_to_run} baris dalam {total_time:.1f}s). "
+                "Data bertanda `annotation_source='mock_simulation'` dan TIDAK digunakan untuk training riset."
+            )
+        else:
+            st.success(
+                f"🎉 Selesai! Berhasil memproses **{total_to_run}** baris dalam **{total_time:.1f}** detik "
+                f"(Rata-rata: {total_to_run / total_time:.2f} sampel/detik | Sukses: {success_count}, Error: {error_count}). "
+                f"Checkpoint tersimpan di `{checkpoint_file.name}`."
+            )
 
     # 6. Preview & Download Checkpoint
     if "latest_batch_df" in st.session_state or existing_ckpt_df is not None:

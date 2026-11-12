@@ -1,149 +1,231 @@
 import re
-from typing import Optional, Any
+from typing import Optional, Any, Dict, List, Tuple
 from pydantic import BaseModel, Field
 
+MISSING_LABEL = "UNKNOWN"
+
+VALID_CYBERBULLYING = {"YES", "NO"}
+VALID_TYPES = {"INS", "BSH", "SHM", "SAR", "THR", "DIS", "SEX", "EXC", "NONE"}
+VALID_EMOTIONS = {"ANG", "DIS", "HUM", "MOCK", "SAD", "NEU"}
+VALID_CULTURAL_CONTEXTS = {"APP", "INT", "STA", "FAM", "EDU", "REG", "GEN", "NONE"}
+VALID_IMPLICIT_LEVELS = {"E0", "E1", "E2"}
+VALID_SEVERITIES = {"LOW", "MEDIUM", "HIGH", "NONE"}
+
+
 class AnnotationSchema(BaseModel):
-    cyberbullying: str = Field(description="YES or NO")
-    type: str = Field(description="INS, BSH, SHM, SAR, THR, DIS, SEX, EXC, or NONE")
-    emotion: str = Field(description="ANG, DIS, HUM, MOCK, SAD, NEU")
-    cultural_context: str = Field(description="APP, INT, STA, FAM, EDU, REG, GEN, or NONE")
-    implicit_level: str = Field(description="E0, E1, E2")
-    severity: str = Field(description="LOW, MEDIUM, HIGH, or NONE")
-    confidence: float = Field(default=0.85, ge=0.0, le=1.0, description="Numeric confidence score in range 0.0 to 1.0")
+    cyberbullying: str = Field(description="YES or NO (or UNKNOWN if missing)")
+    type: str = Field(description="INS, BSH, SHM, SAR, THR, DIS, SEX, EXC, NONE, or UNKNOWN")
+    emotion: str = Field(description="ANG, DIS, HUM, MOCK, SAD, NEU, or UNKNOWN")
+    cultural_context: str = Field(description="APP, INT, STA, FAM, EDU, REG, GEN, NONE, or UNKNOWN")
+    implicit_level: str = Field(description="E0, E1, E2, or UNKNOWN")
+    severity: str = Field(description="LOW, MEDIUM, HIGH, NONE, or UNKNOWN")
+    confidence: Optional[float] = Field(
+        default=None, ge=0.0, le=1.0, description="Numeric confidence score in range 0.0 to 1.0"
+    )
     explanation: Optional[str] = Field(default="", description="Chain-of-thought explanation of the classification")
 
-def parse_confidence_score(val: Any, default: float = 0.85) -> float:
+
+def parse_confidence_score(val: Any, default: Optional[float] = 0.85) -> Optional[float]:
     """
     Converts diverse confidence formats (float, int, string numbers, 'HIGH'/'MEDIUM'/'LOW')
-    into a standardized float strictly in the range [0.0, 1.0].
+    into a standardized float strictly in [0.0, 1.0]. Returns `default` if invalid/missing.
     """
-    if val is None:
+    if val is None or (isinstance(val, float) and val != val):
         return default
 
-    # If already a number
     if isinstance(val, (int, float)):
         score = float(val)
-        if score > 1.0 and score <= 100.0:
+        if 1.0 < score <= 100.0:
             score = score / 100.0
-        return round(max(0.0, min(1.0, score)), 2)
+        if score < 0.0 or score > 100.0:
+            return default
+        return round(max(0.0, min(1.0, score)), 4)
 
     s = str(val).strip().upper()
-    if not s or s in ["-", "N/A", "NONE", "NULL"]:
+    if not s or s in {"-", "N/A", "NA", "NONE", "NULL", "NAN"}:
         return default
 
-    # Map qualitative linguistic labels to numeric scores
     qualitative_map = {
-        "HIGH": 0.90,
         "VERY HIGH": 0.95,
-        "TINGGI": 0.90,
         "SANGAT TINGGI": 0.95,
+        "HIGH": 0.90,
+        "TINGGI": 0.90,
         "MEDIUM": 0.70,
         "MODERATE": 0.70,
         "SEDANG": 0.70,
+        "VERY LOW": 0.30,
+        "SANGAT RENDAH": 0.30,
         "LOW": 0.50,
         "RENDAH": 0.50,
-        "VERY LOW": 0.30,
-        "SANGAT RENDAH": 0.30
     }
     for k, score in qualitative_map.items():
         if k in s:
             return score
 
-    # Extract numeric pattern like 0.85, .9, 85%, etc.
     s_clean = s.replace(",", ".")
-    match = re.search(r"(\d+(?:\.\d+)?)", s_clean)
+    match = re.search(r"(-?\d+(?:\.\d+)?)", s_clean)
     if match:
         try:
             num = float(match.group(1))
-            if "%" in s or num > 1.0:
+            if "%" in s or (1.0 < num <= 100.0):
                 num = num / 100.0
-            return round(max(0.0, min(1.0, num)), 2)
+            if num < 0.0 or num > 1.0:
+                return default
+            return round(num, 4)
         except ValueError:
             pass
 
     return default
 
-def sanitize_annotation_dict(data: dict) -> dict:
-    """
-    Normalize extracted fields to ensure clean presentation in UI and datasets.
-    Guarantees:
-    1. Confidence is strictly float between 0.0 and 1.0.
-    2. No fields are empty or blank (empty strings replaced with 'NONE', 'NEU', 'E0', etc.).
-    """
-    # 1. Cyberbullying (YES / NO)
+
+def _match_valid_code(raw_val: Any, valid_codes: set) -> Optional[str]:
+    """Extracts an exact or contained taxonomy code; returns None if missing/invalid."""
+    if raw_val is None or (isinstance(raw_val, float) and raw_val != raw_val):
+        return None
+    s = str(raw_val).strip().upper()
+    if not s or s in {"-", "NA", "N/A", "NULL", "NAN", "UNKNOWN", "MISSING"}:
+        return None
+    if s in valid_codes:
+        return s
+    # Word-boundary lookup first, then substring fallback
+    tokens = re.findall(r"[A-Z0-9_]+", s)
+    for tok in tokens:
+        if tok in valid_codes:
+            return tok
+    for vc in sorted(valid_codes, key=len, reverse=True):
+        if vc in s:
+            return vc
+    return None
+
+
+def validate_annotation_record(data: Dict[str, Any]) -> Tuple[bool, List[str]]:
+    """Checks raw taxonomy & cross-field consistency of an annotation dictionary."""
+    issues: List[str] = []
     cb_raw = str(data.get("cyberbullying", "")).strip().upper()
-    if "YES" in cb_raw:
+    cb = None
+    if cb_raw in {"YES", "1", "TRUE"} or "YES" in cb_raw:
         cb = "YES"
-    elif "NO" in cb_raw:
+    elif cb_raw in {"NO", "0", "FALSE"} or "NO" in cb_raw:
         cb = "NO"
     else:
-        cb = "NO" if cb_raw in ["0", "FALSE", "BUKAN", "TIDAK", "NEGATIVE"] else "YES"
+        issues.append(f"invalid_cyberbullying:{cb_raw or 'EMPTY'}")
+
+    t_val = _match_valid_code(data.get("type"), VALID_TYPES)
+    if t_val is None:
+        issues.append("missing_or_invalid_type")
+    e_val = _match_valid_code(data.get("emotion"), VALID_EMOTIONS)
+    if e_val is None:
+        issues.append("missing_or_invalid_emotion")
+    c_val = _match_valid_code(data.get("cultural_context"), VALID_CULTURAL_CONTEXTS)
+    if c_val is None:
+        issues.append("missing_or_invalid_cultural_context")
+    i_val = _match_valid_code(data.get("implicit_level"), VALID_IMPLICIT_LEVELS)
+    if i_val is None:
+        issues.append("missing_or_invalid_implicit_level")
+
+    s_raw = str(data.get("severity", "")).strip().upper()
+    s_val = _match_valid_code("MEDIUM" if "MED" in s_raw and "MEDIUM" not in s_raw else s_raw, VALID_SEVERITIES)
+    if s_val is None:
+        issues.append("missing_or_invalid_severity")
+
+    conf = parse_confidence_score(data.get("confidence"), default=None)
+    if conf is None or not (0.0 <= conf <= 1.0):
+        issues.append("invalid_confidence")
+
+    if cb == "NO":
+        if t_val not in (None, "NONE"):
+            issues.append(f"inconsistent_type_for_non_cb:{t_val}")
+        if s_val not in (None, "NONE", "LOW"):
+            issues.append(f"inconsistent_severity_for_non_cb:{s_val}")
+    elif cb == "YES":
+        if t_val == "NONE":
+            issues.append("inconsistent_type_NONE_for_cb_YES")
+        if s_val == "NONE":
+            issues.append("inconsistent_severity_NONE_for_cb_YES")
+
+    return len(issues) == 0, issues
+
+
+def sanitize_annotation_dict(
+    data: dict,
+    preserve_missing: bool = True,
+) -> dict:
+    """
+    Normalizes extracted fields into standard taxonomy codes.
+    When `preserve_missing=True` (recommended for scientific curation), unknown/missing
+    fields are explicitly preserved as 'UNKNOWN' (and confidence as None when absent/invalid)
+    rather than fabricating default valid labels.
+    """
+    # 1. Cyberbullying (YES / NO / UNKNOWN)
+    cb_raw = "" if data.get("cyberbullying") is None else str(data.get("cyberbullying", "")).strip().upper()
+    if cb_raw in {"YES", "1", "TRUE", "YA", "POSITIVE_CB"} or "YES" in cb_raw:
+        cb = "YES"
+    elif cb_raw in {"NO", "0", "FALSE", "BUKAN", "TIDAK", "NEGATIVE"} or re.search(r"\bNO\b", cb_raw):
+        cb = "NO"
+    else:
+        cb = MISSING_LABEL if preserve_missing else "NO"
 
     # 2. Type
-    valid_types = {"INS", "BSH", "SHM", "SAR", "THR", "DIS", "SEX", "EXC", "NONE"}
-    t_raw = str(data.get("type", "")).strip().upper()
-    if t_raw in ["", "-", "NA", "N/A", "NULL", "NONE"]:
-        t_val = "NONE" if cb == "NO" else "INS"
+    t_match = _match_valid_code(data.get("type"), VALID_TYPES)
+    if t_match is not None:
+        t_val = t_match
+    elif cb == "NO" and str(data.get("type", "")).strip().upper() in {"", "-", "NA", "N/A", "NULL", "NONE"}:
+        t_val = "NONE"
     else:
-        # Check if code exists in string
-        matched_type = next((vt for vt in valid_types if vt in t_raw), None)
-        t_val = matched_type if matched_type else ("NONE" if cb == "NO" else "INS")
+        t_val = MISSING_LABEL if preserve_missing else ("NONE" if cb == "NO" else MISSING_LABEL)
 
     # 3. Emotion
-    valid_emotions = {"ANG", "DIS", "HUM", "MOCK", "SAD", "NEU"}
-    e_raw = str(data.get("emotion", "")).strip().upper()
-    if e_raw in ["", "-", "NA", "N/A", "NULL", "NONE"]:
-        e_val = "NEU"
-    else:
-        matched_emo = next((ve for ve in valid_emotions if ve in e_raw), None)
-        e_val = matched_emo if matched_emo else "NEU"
+    e_match = _match_valid_code(data.get("emotion"), VALID_EMOTIONS)
+    e_val = e_match if e_match is not None else (MISSING_LABEL if preserve_missing else "NEU")
 
     # 4. Cultural Context
-    valid_cults = {"APP", "INT", "STA", "FAM", "EDU", "REG", "GEN", "NONE"}
-    c_raw = str(data.get("cultural_context", "")).strip().upper()
-    if c_raw in ["", "-", "NA", "N/A", "NULL", "NONE"]:
+    c_match = _match_valid_code(data.get("cultural_context"), VALID_CULTURAL_CONTEXTS)
+    if c_match is not None:
+        c_val = c_match
+    elif cb == "NO" and str(data.get("cultural_context", "")).strip().upper() in {"", "-", "NA", "N/A", "NULL", "NONE"}:
         c_val = "NONE"
     else:
-        matched_cult = next((vc for vc in valid_cults if vc in c_raw), None)
-        c_val = matched_cult if matched_cult else "NONE"
+        c_val = MISSING_LABEL if preserve_missing else "NONE"
 
     # 5. Implicit Level
-    valid_implicits = {"E0", "E1", "E2"}
-    i_raw = str(data.get("implicit_level", "")).strip().upper()
-    if i_raw in ["", "-", "NA", "N/A", "NULL", "NONE"]:
-        i_val = "E0"
-    else:
-        matched_imp = next((vi for vi in valid_implicits if vi in i_raw), None)
-        i_val = matched_imp if matched_imp else "E0"
+    i_match = _match_valid_code(data.get("implicit_level"), VALID_IMPLICIT_LEVELS)
+    i_val = i_match if i_match is not None else (MISSING_LABEL if preserve_missing else "E0")
 
     # 6. Severity
-    valid_severities = {"LOW", "MEDIUM", "HIGH", "NONE"}
-    s_raw = str(data.get("severity", "")).strip().upper()
-    if s_raw in ["", "-", "NA", "N/A", "NULL", "NONE"]:
-        s_val = "NONE" if cb == "NO" else "LOW"
+    s_raw = "" if data.get("severity") is None else str(data.get("severity", "")).strip().upper()
+    if "MED" in s_raw and "MEDIUM" not in s_raw:
+        s_raw = "MEDIUM"
+    s_match = _match_valid_code(s_raw, VALID_SEVERITIES)
+    if s_match is not None:
+        s_val = s_match
+    elif cb == "NO" and s_raw in {"", "-", "NA", "N/A", "NULL", "NONE"}:
+        s_val = "NONE"
     else:
-        if "HIGH" in s_raw:
-            s_val = "HIGH"
-        elif "MED" in s_raw:
-            s_val = "MEDIUM"
-        elif "LOW" in s_raw:
-            s_val = "LOW"
-        elif "NONE" in s_raw:
+        s_val = MISSING_LABEL if preserve_missing else ("NONE" if cb == "NO" else MISSING_LABEL)
+
+    # Strict cross-field consistency enforcement for clean NO rows
+    if cb == "NO":
+        if t_val != "NONE" and t_val != MISSING_LABEL:
+            t_val = "NONE"
+        if s_val not in {"NONE", MISSING_LABEL}:
             s_val = "NONE"
-        else:
-            s_val = "NONE" if cb == "NO" else "LOW"
 
-    # 7. Confidence Score (Float 0.0 - 1.0)
-    conf_raw = data.get("confidence", 0.85)
-    conf_val = parse_confidence_score(conf_raw, default=0.85)
+    # 7. Confidence Score
+    conf_val = parse_confidence_score(
+        data.get("confidence"),
+        default=None if preserve_missing else 0.0,
+    )
 
-    # 8. Explanation (Non-empty rationale)
-    exp_val = str(data.get("explanation", "")).strip()
-    if not exp_val or exp_val in ["-", "N/A", "NULL"]:
-        if cb == "NO":
-            exp_val = "Teks merupakan ujaran netral tanpa indikasi perundungan siber atau ujaran kebencian."
+    # 8. Explanation
+    raw_exp = data.get("explanation", "")
+    exp_val = "" if raw_exp is None else str(raw_exp).strip()
+    if not exp_val or exp_val.upper() in {"-", "N/A", "NA", "NULL", "NAN", "NONE"}:
+        if preserve_missing:
+            exp_val = ""
+        elif cb == "NO":
+            exp_val = "Teks merupakan ujaran netral tanpa indikasi perundungan siber."
         else:
-            exp_val = f"Teks teridentifikasi memuat unsur perundungan siber tipe {t_val}."
+            exp_val = f"Teks teridentifikasi memuat unsur perundungan siber ({t_val})."
 
     return {
         "cyberbullying": cb,
@@ -153,5 +235,5 @@ def sanitize_annotation_dict(data: dict) -> dict:
         "implicit_level": i_val,
         "severity": s_val,
         "confidence": conf_val,
-        "explanation": exp_val
+        "explanation": exp_val,
     }

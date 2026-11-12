@@ -1,23 +1,24 @@
 % ===============================================================
-% TABEL 1: METRIK KINERJA KESELURUHAN (BAB 4 HASIL DISERTASI)
+% TABEL 1: METRIK KINERJA KESELURUHAN (BAB 4 DISERTASI)
 % ===============================================================
 \begin{table}[htbp]
 \centering
-\caption{Metrik Evaluasi Performa Model IndoBERTweet pada Dataset Uji (Test Set)}
-\label{tab:indobertweet_overall_performance}
+\caption{Metrik Evaluasi Komprehensif pada Data Uji (Test Set, $\tau^*=0.76$)}
+\label{tab:overall_performance}
 \begin{tabular}{lc}
 \hline
-\textbf{Metrik Evaluasi} & \textbf{Nilai} \\
+\textbf{Metrik Evaluasi} & \textbf{Nilai (95\% Bootstrap CI)} \\
 \hline
-Ambang Batas Optimal ($\tau^*$) & 0.48 \\
-Akurasi Baseline ($\tau=0.50$) & 0.7667 (76.67\%) \\
-\textbf{Akurasi Optimal ($\tau^*$)} & \textbf{0.7800 (78.00\%)} \\
-Macro Precision & 0.7815 \\
-Macro Recall & 0.7748 \\
-\textbf{Macro F1-Score} & \textbf{0.7764} \\
-Weighted F1-Score & 0.7787 \\
-Area Under ROC (ROC-AUC) & 0.8576 \\
-Log-Loss & 0.4745 \\
+Accuracy & 0.2000 ([0.0, 0.6]) \\
+\textbf{Macro F1-Score} & \textbf{0.1667} ([0.0, 0.375]) \\
+Weighted F1-Score & 0.0667 \\
+Macro Precision & 0.1000 \\
+Macro Recall & 0.5000 \\
+ROC-AUC & 0.0 ([0.0, 0.0]) \\
+PR-AUC & 0.6792 ([0.325, 0.7625]) \\
+Expected Calibration Error (ECE) & 0.0559 \\
+Brier Score & 0.1689 \\
+Log-Loss & 0.5243 \\
 \hline
 \end{tabular}
 \end{table}
@@ -27,35 +28,50 @@ Log-Loss & 0.4745 \\
 % ===============================================================
 \begin{table}[htbp]
 \centering
-\caption{Laporan Klasifikasi Terperinci per Kelas Target}
-\label{tab:indobertweet_class_report}
+\caption{Laporan Klasifikasi per Kelas}
+\label{tab:class_report}
 \begin{tabular}{lcccc}
 \hline
-\textbf{Kelas Target} & \textbf{Precision} & \textbf{Recall} & \textbf{F1-Score} & \textbf{Support (N)} \\
+\textbf{Kelas} & \textbf{Precision} & \textbf{Recall} & \textbf{F1-Score} & \textbf{Support} \\
 \hline
-Non-Cyberbullying (0) & 0.7727 & 0.8395 & 0.8047 & 81 \\
-Cyberbullying (1) & 0.7903 & 0.7101 & 0.7481 & 69 \\
+Non-Cyberbullying (0) & 0.2000 & 1.0000 & 0.3333 & 1 \\
+Cyberbullying (1) & 0.0000 & 0.0000 & 0.0000 & 4 \\
 \hline
-\textbf{Macro Average} & 0.7815 & 0.7748 & \textbf{0.7764} & 150 \\
-\hline
-\multicolumn{5}{l}{\footnotesize \textit{Confusion Matrix: True Neg (TN)=68, False Pos (FP)=13, False Neg (FN)=20, True Pos (TP)=49}} \\
+\multicolumn{5}{l}{\footnotesize \textit{Confusion Matrix: TN=1, FP=0, FN=4, TP=0}} \\
 \end{tabular}
 \end{table}
 
 % ===============================================================
-% TABEL 3: ANALISIS KINERJA BERDASARKAN TINGKAT KETERBUKAAN (IMPLICITNESS)
+% TABEL 3: KETAHANAN TERHADAP TINGKAT KETERBUKAAN (E0/E1/E2)
 % ===============================================================
 \begin{table}[htbp]
 \centering
-\caption{Evaluasi Ketahanan Model terhadap Tingkat Keterbukaan Ujaran (Explicit vs Implicit)}
-\label{tab:indobertweet_implicit_analysis}
+\caption{Evaluasi Kinerja pada Ujaran Eksplisit hingga Implisit (E0/E1/E2)}
+\label{tab:implicit_analysis}
 \begin{tabular}{lccc}
 \hline
-\textbf{Tingkat Keterbukaan} & \textbf{Jumlah Sampel} & \textbf{Prediksi Benar} & \textbf{Akurasi (\%)} \\
+\textbf{Tingkat} & \textbf{Support} & \textbf{Akurasi (\%)} & \textbf{Macro-F1} \\
 \hline
-E0 (Sangat Eksplisit) & 103 & 87 & 84.47\% \\
-E1 (Semi-Tersirat) & 46 & 30 & 65.22\% \\
-E2 (Tersirat/Kontekstual) & 1 & 0 & 0.00\% \\
+E0 & 4 & 25.00\% & 0.2000 \\
+E1 & 1 & 0.00\% & 0.0000 \\
+\hline
+\end{tabular}
+\end{table}
+
+% ===============================================================
+% TABEL 4: ABLATION STUDY (INDOBERTWEET-ONLY vs LLM-ONLY vs HYBRID)
+% ===============================================================
+\begin{table}[htbp]
+\centering
+\caption{Studi Ablasi pada Test Set yang Sama}
+\label{tab:ablation_study}
+\begin{tabular}{lcccc}
+\hline
+\textbf{Varian Model} & \textbf{Accuracy} & \textbf{Macro-F1} & \textbf{ROC-AUC} & \textbf{PR-AUC} \\
+\hline
+A. IndoBERTweet-Only (Stream A) & 0.2000 & 0.1667 & 0.0 & 0.6792 \\
+B. LLM Representation-Only (Stream B) & \multicolumn{4}{c}{Diblokir (blocked_circular_pseudo_label_leakage)} \\
+C. Hybrid Dual-Stream Fusion (IndoBERTweet + LLM Knowledge) & 0.8000 & 0.4444 & 0.75 & 0.95 \\
 \hline
 \end{tabular}
 \end{table}

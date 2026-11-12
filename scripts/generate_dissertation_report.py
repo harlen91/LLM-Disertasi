@@ -1,229 +1,164 @@
 #!/usr/bin/env python3
 """
-generate_dissertation_report.py
---------------------------------
-Modul Evaluasi dan Generator Laporan Metrik Riset Disertasi.
+scripts/generate_dissertation_report.py
+---------------------------------------
+Generator Laporan Evaluasi Komprehensif, Visualisasi Publikasi (300 DPI),
+dan Tabel LaTeX untuk Bab 4 Naskah Disertasi.
 
-Menghasilkan:
-1. Tabel Metrik Komprehensif (Accuracy, Precision, Recall, Macro-F1, Weighted-F1, ROC-AUC).
-2. Analisis Per-Dimensi Taksonomi (Keterbukaan E0/E1/E2, Tipe Cyberbullying, Konteks Kultural, Severity).
-3. Kode Tabel LaTeX Siap Salin untuk Bab 4 Hasil & Pembahasan Disertasi.
-4. Visualisasi Grafik Publikasi (300 DPI PNG): Confusion Matrix & Analisis Keterbukaan.
-5. Dokumen Laporan Markdown Komprehensif (evaluation_report.md).
+Perbaikan Kritis:
+1. Menghapus simulasi probabilitas dari `y_true` ketika checkpoint tidak tersedia;
+   skrip menolak membuat metrik palsu dan meminta checkpoint model terlatih.
+2. Menggunakan `find_optimal_threshold_on_val` STRICTLY dari `val.csv` atau `model_manifest.json`.
+3. Memuat `ablation_comparison.json` dan `dual_xai_evaluation.json` jika tersedia untuk tabel ablasi lengkap.
+4. Menghasilkan metrik lengkap: Accuracy, Precision, Recall, Macro/Weighted F1, Confusion Matrix,
+   ROC-AUC, PR-AUC, Class-wise, Calibration (ECE, MCE, Brier, Log-Loss), Bootstrap 95% CI,
+   E0/E1/E2 breakdown, Cyberbullying Type breakdown, dan Error Analysis FP/FN.
 """
 
-import os
-import sys
-import json
 import argparse
+import json
+import sys
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from pathlib import Path
-from typing import Dict, Any, Tuple
-
-import torch
-from sklearn.metrics import (
-    accuracy_score, precision_recall_fscore_support,
-    classification_report, confusion_matrix,
-    roc_auc_score, log_loss
-)
-import matplotlib.pyplot as plt
 import seaborn as sns
+import torch
 
-# Setup Project Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_DIR = SCRIPT_DIR.parent
-if str(PROJECT_DIR) not in sys.path:
-    sys.path.insert(0, str(PROJECT_DIR))
-if str(SCRIPT_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPT_DIR))
-DEFAULT_MODEL_DIR = PROJECT_DIR / "output" / "models" / "indobertweet_cyberbullying" / "best_model"
-DEFAULT_TEST_CSV = PROJECT_DIR / "output" / "final" / "test.csv"
-DEFAULT_REPORT_DIR = PROJECT_DIR / "output" / "evaluation_report"
+sys.path.insert(0, str(PROJECT_DIR))
+
+from config import EVAL_REPORT_DIR, FINAL_DIR, MODELS_DIR
+from core.data_understanding import clean_and_normalize_social_text
+from core.evaluation_metrics import (
+    compute_comprehensive_classification_metrics,
+    find_optimal_threshold_on_val,
+    load_model_manifest,
+)
+
+DEFAULT_MODEL_DIR = MODELS_DIR / "indobertweet_cyberbullying" / "best_model"
+DEFAULT_HYBRID_DIR = MODELS_DIR / "hybrid_fusion_indobertweet"
+DEFAULT_TEST_CSV = FINAL_DIR / "test.csv"
+DEFAULT_REPORT_DIR = EVAL_REPORT_DIR
 
 
-def evaluate_model_on_dataset(
+def evaluate_baseline_model_probs(
     model,
     tokenizer,
     device: str,
-    df: pd.DataFrame
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Menghitung prediksi dan probabilitas untuk seluruh baris dataset."""
-    texts = df["comment"].astype(str).tolist()
-    y_true = df["label"].astype(int).to_numpy()
+    df: pd.DataFrame,
+    batch_size: int = 32,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Mengembalikan `(y_true, probs_pos)` secara konsisten menggunakan `comment_normalized`."""
+    text_col = "comment_normalized" if "comment_normalized" in df.columns else "comment"
+    texts = [clean_and_normalize_social_text(str(t)) for t in df[text_col]]
+    y_true = df["label"].to_numpy()
+    probs_pos: List[float] = []
 
-    all_preds = []
-    all_probs = []
+    model.eval()
+    with torch.no_grad():
+        for i in range(0, len(texts), batch_size):
+            batch_texts = texts[i : i + batch_size]
+            enc = tokenizer(
+                batch_texts,
+                padding=True,
+                truncation=True,
+                max_length=128,
+                return_tensors="pt",
+            ).to(device)
+            logits = model(**enc).logits
+            probs = torch.softmax(logits, dim=-1)[:, 1].cpu().numpy()
+            probs_pos.extend(probs.tolist())
 
-    batch_size = 32
-    for i in range(0, len(texts), batch_size):
-        batch_texts = texts[i:i + batch_size]
-        inputs = tokenizer(
-            batch_texts,
-            padding=True,
-            truncation=True,
-            max_length=128,
-            return_tensors="pt"
-        ).to(device)
-
-        with torch.no_grad():
-            outputs = model(**inputs)
-            logits = outputs.logits
-            probs = torch.softmax(logits, dim=-1).cpu().numpy()
-
-        preds = np.argmax(probs, axis=1)
-        all_preds.extend(preds)
-        all_probs.extend(probs)
-
-    return y_true, np.array(all_preds), np.array(all_probs)
+    return y_true, np.asarray(probs_pos, dtype=float)
 
 
-def find_optimal_threshold(
-    model,
-    tokenizer,
-    device: str,
-    val_csv: Path
-) -> float:
-    """Mencari ambang batas keputusan optimal pada Validation Set untuk memaksimalkan Macro-F1."""
-    if not val_csv.exists():
-        return 0.50
-    try:
-        df_val = pd.read_csv(val_csv)
-        y_true, _, probs = evaluate_model_on_dataset(model, tokenizer, device, df_val)
-        prob_cb = probs[:, 1]
-        best_th = 0.50
-        best_f1 = 0.0
-        for th in np.arange(0.30, 0.70, 0.02):
-            preds = (prob_cb >= th).astype(int)
-            _, _, f1, _ = precision_recall_fscore_support(y_true, preds, average="macro", zero_division=0)
-            if f1 > best_f1:
-                best_f1 = f1
-                best_th = round(float(th), 2)
-        return best_th
-    except Exception as e:
-        print(f"⚠️ Peringatan: Gagal optimasi threshold ({e}), menggunakan default 0.50.")
-        return 0.50
+def plot_publication_figures(
+    metrics: Dict[str, Any],
+    output_dir: Path,
+) -> None:
+    """Menghasilkan grafik 300 DPI siap publikasi."""
+    sns.set_theme(style="white")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    cm = np.array(metrics["confusion_matrix_2x2"], dtype=int)
 
-
-def calculate_comprehensive_metrics(
-    y_true: np.ndarray,
-    y_pred: np.ndarray,
-    y_probs: np.ndarray
-) -> Dict[str, Any]:
-    """Menghitung seluruh metrik standar evaluasi riset NLP disertasi."""
-    acc = accuracy_score(y_true, y_pred)
-    prec_macro, rec_macro, f1_macro, _ = precision_recall_fscore_support(
-        y_true, y_pred, average="macro", zero_division=0
+    # 1. Confusion Matrix Heatmap
+    plt.figure(figsize=(6, 5), dpi=300)
+    cm_labels = ["Non-Cyberbullying (0)", "Cyberbullying (1)"]
+    sns.heatmap(
+        cm,
+        annot=True,
+        fmt="d",
+        cmap="Blues",
+        xticklabels=cm_labels,
+        yticklabels=cm_labels,
+        cbar=False,
+        annot_kws={"size": 14, "weight": "bold"},
     )
-    prec_w, rec_w, f1_w, _ = precision_recall_fscore_support(
-        y_true, y_pred, average="weighted", zero_division=0
-    )
+    plt.title("Confusion Matrix pada Data Uji Independen", fontsize=12, pad=12, weight="bold")
+    plt.xlabel("Prediksi Model", fontsize=10, weight="bold")
+    plt.ylabel("Label Referensi", fontsize=10, weight="bold")
+    plt.tight_layout()
+    plt.savefig(output_dir / "figure_confusion_matrix.png", dpi=300)
+    plt.close()
 
-    # Class-wise metrics
-    p_cls, r_cls, f1_cls, supp_cls = precision_recall_fscore_support(
-        y_true, y_pred, average=None, zero_division=0
-    )
-
-    # ROC-AUC & Log Loss
-    try:
-        roc_auc = roc_auc_score(y_true, y_probs[:, 1])
-    except Exception:
-        roc_auc = 0.0
-
-    try:
-        loss_val = log_loss(y_true, y_probs)
-    except Exception:
-        loss_val = 0.0
-
-    cm = confusion_matrix(y_true, y_pred)
-
-    return {
-        "accuracy": round(float(acc), 4),
-        "macro_precision": round(float(prec_macro), 4),
-        "macro_recall": round(float(rec_macro), 4),
-        "macro_f1": round(float(f1_macro), 4),
-        "weighted_precision": round(float(prec_w), 4),
-        "weighted_recall": round(float(rec_w), 4),
-        "weighted_f1": round(float(f1_w), 4),
-        "roc_auc": round(float(roc_auc), 4),
-        "log_loss": round(float(loss_val), 4),
-        "confusion_matrix": cm.tolist(),
-        "per_class": {
-            "non_cyberbullying": {
-                "precision": round(float(p_cls[0]), 4),
-                "recall": round(float(r_cls[0]), 4),
-                "f1": round(float(f1_cls[0]), 4),
-                "support": int(supp_cls[0])
-            },
-            "cyberbullying": {
-                "precision": round(float(p_cls[1]), 4),
-                "recall": round(float(r_cls[1]), 4),
-                "f1": round(float(f1_cls[1]), 4),
-                "support": int(supp_cls[1])
-            }
-        }
-    }
+    # 2. Implicitness Breakdown Plot (E0/E1/E2)
+    imp = metrics.get("implicitness_breakdown", {})
+    if imp:
+        levels = list(imp.keys())
+        accs = [imp[l]["accuracy"] * 100.0 for l in levels]
+        plt.figure(figsize=(7, 4.5), dpi=300)
+        colors = ["#2b6cb0", "#4299e1", "#90cdf4"]
+        bars = plt.bar(levels, accs, color=colors[: len(levels)], width=0.5)
+        plt.title("Akurasi Berdasarkan Tingkat Keterbukaan Ujaran (E0/E1/E2)", fontsize=12, pad=12, weight="bold")
+        plt.xlabel("Dimensi Keterbukaan", fontsize=10)
+        plt.ylabel("Akurasi (%)", fontsize=10)
+        plt.ylim(0, 108)
+        for bar in bars:
+            yv = bar.get_height()
+            plt.text(bar.get_x() + bar.get_width() / 2.0, yv + 2, f"{yv:.1f}%", ha="center", va="bottom", weight="bold")
+        plt.grid(axis="y", linestyle="--", alpha=0.5)
+        plt.tight_layout()
+        plt.savefig(output_dir / "figure_implicitness_accuracy.png", dpi=300)
+        plt.close()
 
 
-def analyze_taxonomy_breakdown(df_evaluated: pd.DataFrame) -> Dict[str, pd.DataFrame]:
-    """
-    Analisis performa model terurai berdasarkan dimensi taksonomi riset:
-    1. Implicit Level (E0 vs E1 vs E2)
-    2. Cyberbullying Type (INS, BSH, SAR, dll.)
-    3. Cultural Context (APP, STA, dll.)
-    4. Severity (LOW, MEDIUM, HIGH)
-    """
-    results = {}
-    
-    # Hitung flag prediksi benar (is_correct)
-    df_evaluated["is_correct"] = (df_evaluated["label"] == df_evaluated["pred"]).astype(int)
-
-    for dim in ["implicit_level", "type", "cultural_context", "severity"]:
-        if dim in df_evaluated.columns:
-            # Filter baris yang relevan (misal untuk tipe cyberbullying hanya kasus YES)
-            sub = df_evaluated[df_evaluated[dim].notna() & (df_evaluated[dim] != "")]
-            if dim in ["type", "cultural_context", "severity"]:
-                sub = sub[sub["label"] == 1]  # Khusus kelas perundungan
-
-            if len(sub) > 0:
-                breakdown = sub.groupby(dim).agg(
-                    Total=("is_correct", "count"),
-                    Benar=("is_correct", "sum"),
-                    Akurasi=("is_correct", "mean")
-                ).reset_index()
-                breakdown["Akurasi (%)"] = (breakdown["Akurasi"] * 100).round(2)
-                breakdown = breakdown.sort_values(by="Total", ascending=False)
-                results[dim] = breakdown
-
-    return results
-
-
-def generate_latex_tables(metrics: Dict[str, Any], taxonomy_breakdown: Dict[str, pd.DataFrame]) -> str:
-    """Menghasilkan kode LaTeX tabel siap salin untuk bab laporan disertasi."""
+def generate_latex_tables(
+    metrics: Dict[str, Any],
+    ablation: Optional[Dict[str, Any]] = None,
+) -> str:
     cm = metrics["confusion_matrix"]
-    tn, fp = cm[0][0], cm[0][1]
-    fn, tp = cm[1][0], cm[1][1]
+    cal = metrics.get("calibration", {})
+    ci = metrics.get("confidence_intervals_95", {})
+    pc0 = metrics["per_class"]["non_cyberbullying"]
+    pc1 = metrics["per_class"]["cyberbullying"]
 
     latex_code = f"""% ===============================================================
-% TABEL 1: METRIK KINERJA KESELURUHAN (BAB 4 HASIL DISERTASI)
+% TABEL 1: METRIK KINERJA KESELURUHAN (BAB 4 DISERTASI)
 % ===============================================================
 \\begin{{table}}[htbp]
 \\centering
-\\caption{{Metrik Evaluasi Performa Model IndoBERTweet pada Dataset Uji (Test Set)}}
-\\label{{tab:indobertweet_overall_performance}}
+\\caption{{Metrik Evaluasi Komprehensif pada Data Uji (Test Set, $\\tau^*={metrics['threshold']:.2f}$)}}
+\\label{{tab:overall_performance}}
 \\begin{{tabular}}{{lc}}
 \\hline
-\\textbf{{Metrik Evaluasi}} & \\textbf{{Nilai}} \\\\
+\\textbf{{Metrik Evaluasi}} & \\textbf{{Nilai (95\\% Bootstrap CI)}} \\\\
 \\hline
-Ambang Batas Optimal ($\\tau^*$) & {metrics.get('optimal_threshold', 0.50):.2f} \\\\
-Akurasi Baseline ($\\tau=0.50$) & {metrics.get('baseline_accuracy', metrics['accuracy']):.4f} ({metrics.get('baseline_accuracy', metrics['accuracy'])*100:.2f}\\%) \\\\
-\\textbf{{Akurasi Optimal ($\\tau^*$)}} & \\textbf{{{metrics['accuracy']:.4f} ({metrics['accuracy']*100:.2f}\\%)}} \\\\
+Accuracy & {metrics['accuracy']:.4f} ({ci.get('accuracy', ['-', '-'])}) \\\\
+\\textbf{{Macro F1-Score}} & \\textbf{{{metrics['macro_f1']:.4f}}} ({ci.get('macro_f1', ['-', '-'])}) \\\\
+Weighted F1-Score & {metrics['weighted_f1']:.4f} \\\\
 Macro Precision & {metrics['macro_precision']:.4f} \\\\
 Macro Recall & {metrics['macro_recall']:.4f} \\\\
-\\textbf{{Macro F1-Score}} & \\textbf{{{metrics['macro_f1']:.4f}}} \\\\
-Weighted F1-Score & {metrics['weighted_f1']:.4f} \\\\
-Area Under ROC (ROC-AUC) & {metrics['roc_auc']:.4f} \\\\
-Log-Loss & {metrics['log_loss']:.4f} \\\\
+ROC-AUC & {metrics.get('roc_auc', 'N/A')} ({ci.get('roc_auc', ['-', '-'])}) \\\\
+PR-AUC & {metrics.get('pr_auc', 'N/A')} ({ci.get('pr_auc', ['-', '-'])}) \\\\
+Expected Calibration Error (ECE) & {cal.get('ece', 'N/A')} \\\\
+Brier Score & {cal.get('brier_score', 'N/A')} \\\\
+Log-Loss & {cal.get('log_loss', 'N/A')} \\\\
 \\hline
 \\end{{tabular}}
 \\end{{table}}
@@ -233,280 +168,209 @@ Log-Loss & {metrics['log_loss']:.4f} \\\\
 % ===============================================================
 \\begin{{table}}[htbp]
 \\centering
-\\caption{{Laporan Klasifikasi Terperinci per Kelas Target}}
-\\label{{tab:indobertweet_class_report}}
+\\caption{{Laporan Klasifikasi per Kelas}}
+\\label{{tab:class_report}}
 \\begin{{tabular}}{{lcccc}}
 \\hline
-\\textbf{{Kelas Target}} & \\textbf{{Precision}} & \\textbf{{Recall}} & \\textbf{{F1-Score}} & \\textbf{{Support (N)}} \\\\
+\\textbf{{Kelas}} & \\textbf{{Precision}} & \\textbf{{Recall}} & \\textbf{{F1-Score}} & \\textbf{{Support}} \\\\
 \\hline
-Non-Cyberbullying (0) & {metrics['per_class']['non_cyberbullying']['precision']:.4f} & {metrics['per_class']['non_cyberbullying']['recall']:.4f} & {metrics['per_class']['non_cyberbullying']['f1']:.4f} & {metrics['per_class']['non_cyberbullying']['support']} \\\\
-Cyberbullying (1) & {metrics['per_class']['cyberbullying']['precision']:.4f} & {metrics['per_class']['cyberbullying']['recall']:.4f} & {metrics['per_class']['cyberbullying']['f1']:.4f} & {metrics['per_class']['cyberbullying']['support']} \\\\
+Non-Cyberbullying (0) & {pc0['precision']:.4f} & {pc0['recall']:.4f} & {pc0['f1']:.4f} & {pc0['support']} \\\\
+Cyberbullying (1) & {pc1['precision']:.4f} & {pc1['recall']:.4f} & {pc1['f1']:.4f} & {pc1['support']} \\\\
 \\hline
-\\textbf{{Macro Average}} & {metrics['macro_precision']:.4f} & {metrics['macro_recall']:.4f} & \\textbf{{{metrics['macro_f1']:.4f}}} & {metrics['per_class']['non_cyberbullying']['support'] + metrics['per_class']['cyberbullying']['support']} \\\\
-\\hline
-\\multicolumn{{5}}{{l}}{{\\footnotesize \\textit{{Confusion Matrix: True Neg (TN)={tn}, False Pos (FP)={fp}, False Neg (FN)={fn}, True Pos (TP)={tp}}}}} \\\\
+\\multicolumn{{5}}{{l}}{{\\footnotesize \\textit{{Confusion Matrix: TN={cm['tn']}, FP={cm['fp']}, FN={cm['fn']}, TP={cm['tp']}}}}} \\\\
 \\end{{tabular}}
 \\end{{table}}
 """
-    # Tabel Keterbukaan (Implicit Level)
-    if "implicit_level" in taxonomy_breakdown:
-        imp_df = taxonomy_breakdown["implicit_level"]
-        latex_code += f"""
+
+    imp = metrics.get("implicitness_breakdown", {})
+    if imp:
+        latex_code += """
 % ===============================================================
-% TABEL 3: ANALISIS KINERJA BERDASARKAN TINGKAT KETERBUKAAN (IMPLICITNESS)
+% TABEL 3: KETAHANAN TERHADAP TINGKAT KETERBUKAAN (E0/E1/E2)
 % ===============================================================
-\\begin{{table}}[htbp]
+\\begin{table}[htbp]
 \\centering
-\\caption{{Evaluasi Ketahanan Model terhadap Tingkat Keterbukaan Ujaran (Explicit vs Implicit)}}
-\\label{{tab:indobertweet_implicit_analysis}}
-\\begin{{tabular}}{{lccc}}
+\\caption{Evaluasi Kinerja pada Ujaran Eksplisit hingga Implisit (E0/E1/E2)}
+\\label{tab:implicit_analysis}
+\\begin{tabular}{lccc}
 \\hline
-\\textbf{{Tingkat Keterbukaan}} & \\textbf{{Jumlah Sampel}} & \\textbf{{Prediksi Benar}} & \\textbf{{Akurasi (\\%)}} \\\\
+\\textbf{Tingkat} & \\textbf{Support} & \\textbf{Akurasi (\\%)} & \\textbf{Macro-F1} \\\\
 \\hline
 """
-        for _, r in imp_df.iterrows():
-            code = r["implicit_level"]
-            lbl = "E0 (Sangat Eksplisit)" if code == "E0" else ("E1 (Semi-Tersirat)" if code == "E1" else "E2 (Tersirat/Kontekstual)")
-            latex_code += f"{lbl} & {int(r['Total'])} & {int(r['Benar'])} & {r['Akurasi (%)']:.2f}\\% \\\\\n"
-        latex_code += """\\hline
-\\end{tabular}
-\\end{table}
+        for lvl, info in imp.items():
+            latex_code += f"{lvl} & {info['count']} & {info['accuracy']*100:.2f}\\% & {info['macro_f1']:.4f} \\\\\n"
+        latex_code += "\\hline\n\\end{tabular}\n\\end{table}\n"
+
+    if ablation:
+        latex_code += """
+% ===============================================================
+% TABEL 4: ABLATION STUDY (INDOBERTWEET-ONLY vs LLM-ONLY vs HYBRID)
+% ===============================================================
+\\begin{table}[htbp]
+\\centering
+\\caption{Studi Ablasi pada Test Set yang Sama}
+\\label{tab:ablation_study}
+\\begin{tabular}{lcccc}
+\\hline
+\\textbf{Varian Model} & \\textbf{Accuracy} & \\textbf{Macro-F1} & \\textbf{ROC-AUC} & \\textbf{PR-AUC} \\\\
+\\hline
 """
+        for key in ["model_a_indobertweet_only", "model_b_llm_only", "model_c_hybrid_fusion"]:
+            m = ablation.get(key)
+            if not m:
+                continue
+            name = m.get("model_name", key)
+            if m.get("accuracy") is None:
+                latex_code += f"{name} & \\multicolumn{{4}}{{c}}{{Diblokir ({m.get('status', 'butuh human GT')})}} \\\\\n"
+            else:
+                latex_code += (
+                    f"{name} & {m['accuracy']:.4f} & {m['macro_f1']:.4f} & "
+                    f"{m.get('roc_auc', 'N/A')} & {m.get('pr_auc', 'N/A')} \\\\\n"
+                )
+        latex_code += "\\hline\n\\end{tabular}\n\\end{table}\n"
 
     return latex_code
 
 
-def plot_publication_figures(
-    cm: np.ndarray,
-    taxonomy_breakdown: Dict[str, pd.DataFrame],
-    output_dir: Path
-):
-    """Menghasilkan grafik visualisasi beresolusi tinggi (300 DPI) untuk naskah publikasi."""
-    sns.set_theme(style="white")
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    # 1. Confusion Matrix Heatmap
-    plt.figure(figsize=(6, 5), dpi=300)
-    cm_labels = ["Non-Cyberbullying\n(Label 0)", "Cyberbullying\n(Label 1)"]
-    sns.heatmap(
-        cm,
-        annot=True,
-        fmt="d",
-        cmap="Blues",
-        xticklabels=cm_labels,
-        yticklabels=cm_labels,
-        cbar=False,
-        annot_kws={"size": 14, "weight": "bold"}
-    )
-    plt.title("Confusion Matrix: IndoBERTweet pada Data Uji", fontsize=12, pad=12, weight="bold")
-    plt.xlabel("Label Prediksi Model", fontsize=10, weight="bold")
-    plt.ylabel("Label Gold Standard (Aktual)", fontsize=10, weight="bold")
-    plt.tight_layout()
-    cm_path = output_dir / "figure_confusion_matrix.png"
-    plt.savefig(cm_path, dpi=300)
-    plt.close()
-
-    # 2. Implicitness Performance Bar Plot
-    if "implicit_level" in taxonomy_breakdown:
-        imp_df = taxonomy_breakdown["implicit_level"].copy()
-        plt.figure(figsize=(7, 4.5), dpi=300)
-        colors = ["#2b6cb0", "#4299e1", "#90cdf4"]
-        bars = plt.bar(imp_df["implicit_level"], imp_df["Akurasi (%)"], color=colors[:len(imp_df)], width=0.5)
-        plt.title("Akurasi Deteksi Berdasarkan Tingkat Keterbukaan Ujaran", fontsize=12, pad=12, weight="bold")
-        plt.xlabel("Dimensi Keterbukaan (E0=Eksplisit, E1=Semi-Tersirat, E2=Tersirat)", fontsize=10)
-        plt.ylabel("Akurasi (%)", fontsize=10)
-        plt.ylim(0, 105)
-        for bar in bars:
-            yval = bar.get_height()
-            plt.text(bar.get_x() + bar.get_width()/2.0, yval + 2, f"{yval:.1f}%", ha='center', va='bottom', weight='bold')
-        plt.grid(axis='y', linestyle='--', alpha=0.5)
-        plt.tight_layout()
-        imp_path = output_dir / "figure_implicitness_accuracy.png"
-        plt.savefig(imp_path, dpi=300)
-        plt.close()
-
-
 def generate_markdown_report(
     metrics: Dict[str, Any],
-    taxonomy_breakdown: Dict[str, pd.DataFrame],
-    output_dir: Path
+    target_source: str,
+    ablation: Optional[Dict[str, Any]],
+    output_dir: Path,
 ) -> Path:
-    """Menghasilkan laporan markdown terstruktur yang siap dibaca peneliti."""
+    output_dir.mkdir(parents=True, exist_ok=True)
     md_path = output_dir / "dissertation_evaluation_report.md"
     cm = metrics["confusion_matrix"]
-    tn, fp = cm[0][0], cm[0][1]
-    fn, tp = cm[1][0], cm[1][1]
+    cal = metrics.get("calibration", {})
+    ci = metrics.get("confidence_intervals_95", {})
+    ea = metrics.get("error_analysis", {})
 
-    content = f"""# 📑 Laporan Evaluasi Komprehensif Disertasi: IndoBERTweet Cyberbullying Detection
+    warning_banner = (
+        "> [!WARNING]\n"
+        "> **Status Label Referensi: `pseudo_labeled_llm`**. Dataset uji belum memiliki kolom ground truth manusia yang tervalidasi secara independen. Seluruh metrik di bawah ini mengukur kesepakatan/distilasi terhadap pseudo-label LLM secara bebas kebocoran (*leakage-free*), bukan akurasi terhadap gold standard manusia.\n"
+        if target_source != "human_ground_truth"
+        else "> [!NOTE]\n> **Status Label Referensi: `human_ground_truth` (Tervalidasi)**. Evaluasi dijalankan secara independen terhadap ground truth manusia.\n"
+    )
 
-Dokumen ini memuat analisis metrik kinerja model Transformer Encoder **IndoBERTweet** (`indolem/indobertweet-base-uncased`) yang dilatih menggunakan dataset IICD hasil kurasi anotasi LLaMA-3 (SumoPod).
+    content = f"""# 📑 Laporan Evaluasi Komprehensif Disertasi
 
----
+{warning_banner}
 
-## 1. Ringkasan Metrik Kinerja Utama (Test Set)
+## 1. Ringkasan Metrik Kinerja Utama (Test Set, $\\tau^* = {metrics['threshold']:.2f}$)
 
-| Metrik Evaluasi | Nilai | Interpretasi Akademik |
-| :--- | :--- | :--- |
-| **Akurasi (Accuracy)** | **{metrics['accuracy']*100:.2f}%** ({metrics['accuracy']:.4f}) | Proporsi total prediksi yang tepat secara keseluruhan. |
-| **Macro F1-Score** | **{metrics['macro_f1']:.4f}** | Rata-rata harmonik F1 tanpa bias ukuran sampel kelas (Metrik Utama). |
-| **Weighted F1-Score** | **{metrics['weighted_f1']:.4f}** | Rata-rata F1 terbobot terhadap frekuensi tiap kelas. |
-| **Macro Precision** | **{metrics['macro_precision']:.4f}** | Rata-rata ketepatan prediksi positif di kedua kelas. |
-| **Macro Recall** | **{metrics['macro_recall']:.4f}** | Rata-rata kemampuan mendeteksi sampel relevan di kedua kelas. |
-| **Area Under ROC (ROC-AUC)** | **{metrics['roc_auc']:.4f}** | Kemampuan diskriminasi probabilitas model membedakan kelas. |
-| **Log-Loss** | **{metrics['log_loss']:.4f}** | Ketidakpastian probabilitas prediksi (makin kecil makin baik). |
+| Metrik Evaluasi | Nilai | 95% Bootstrap CI | Interpretasi |
+| :--- | :---: | :---: | :--- |
+| **Accuracy** | **{metrics['accuracy']*100:.2f}%** ({metrics['accuracy']:.4f}) | {ci.get('accuracy')} | Proporsi prediksi tepat keseluruhan |
+| **Macro F1-Score** | **{metrics['macro_f1']:.4f}** | {ci.get('macro_f1')} | Rata-rata harmonik F1 adil kelas (Utama) |
+| **Weighted F1-Score** | {metrics['weighted_f1']:.4f} | - | Rata-rata F1 terbobot proporsi kelas |
+| **Macro Precision / Recall** | {metrics['macro_precision']:.4f} / {metrics['macro_recall']:.4f} | - | Ketepatan vs sensitivitas makro |
+| **ROC-AUC** | {metrics.get('roc_auc', 'N/A')} | {ci.get('roc_auc')} | Diskriminasi probabilitas ROC |
+| **PR-AUC** | {metrics.get('pr_auc', 'N/A')} | {ci.get('pr_auc')} | Area kurva Precision-Recall |
+| **Calibration (ECE / MCE)** | {cal.get('ece')} / {cal.get('mce')} | - | Kesesuaian kepercayaan probabilistik |
+| **Brier Score / Log-Loss** | {cal.get('brier_score')} / {cal.get('log_loss')} | - | Akurasi probabilistik & ketidakpastian |
 
----
+## 2. Kinerja per Kelas & Analisis Kesalahan (FP / FN)
+- **Confusion Matrix**: `TN={cm['tn']}`, `FP={cm['fp']}`, `FN={cm['fn']}`, `TP={cm['tp']}`
+- **False Positive Rate (FPR)**: {ea.get('false_positive_rate', 0.0)*100:.2f}% ({ea.get('false_positive_count', 0)} sampel)
+- **False Negative Rate (FNR)**: {ea.get('false_negative_rate', 0.0)*100:.2f}% ({ea.get('false_negative_count', 0)} sampel)
 
-## 2. Kinerja per Kelas (Class-wise Classification Report)
+## 3. Rincian Tingkat Keterbukaan (E0/E1/E2) & Tipe Cyberbullying
 
-| Kelas Target | Precision | Recall | F1-Score | Support (N) |
+| Tingkat Keterbukaan | Jumlah | Benar | Akurasi (%) | Macro-F1 |
 | :--- | :---: | :---: | :---: | :---: |
-| **Non-Cyberbullying (0)** | {metrics['per_class']['non_cyberbullying']['precision']:.4f} | {metrics['per_class']['non_cyberbullying']['recall']:.4f} | {metrics['per_class']['non_cyberbullying']['f1']:.4f} | {metrics['per_class']['non_cyberbullying']['support']} |
-| **Cyberbullying (1)** | {metrics['per_class']['cyberbullying']['precision']:.4f} | {metrics['per_class']['cyberbullying']['recall']:.4f} | {metrics['per_class']['cyberbullying']['f1']:.4f} | {metrics['per_class']['cyberbullying']['support']} |
-| **Macro Average** | **{metrics['macro_precision']:.4f}** | **{metrics['macro_recall']:.4f}** | **{metrics['macro_f1']:.4f}** | **{metrics['per_class']['non_cyberbullying']['support'] + metrics['per_class']['cyberbullying']['support']}** |
-
-### Matriks Konfusi (Confusion Matrix):
-- **True Negative (TN)**: {tn} (Ujaran non-cyberbullying diprediksi benar)
-- **False Positive (FP)**: {fp} (Ujaran non-cyberbullying salah diprediksi sebagai cyberbullying / Type I error)
-- **False Negative (FN)**: {fn} (Ujaran cyberbullying luput terdeteksi / Type II error)
-- **True Positive (TP)**: {tp} (Ujaran cyberbullying berhasil dideteksi dengan tepat)
-
----
-
-## 3. Analisis Ketahanan Multi-Dimensi Taksonomi
-
-### A. Berdasarkan Tingkat Keterbukaan Ujaran (Implicit Level):
 """
-    if "implicit_level" in taxonomy_breakdown:
-        imp_df = taxonomy_breakdown["implicit_level"]
-        content += "\n| Tingkat Keterbukaan | Deskripsi | Total Uji | Prediksi Benar | Akurasi (%) |\n| :--- | :--- | :---: | :---: | :---: |\n"
-        for _, r in imp_df.iterrows():
-            code = r["implicit_level"]
-            lbl = "Explicit" if code == "E0" else ("Semi-Implicit" if code == "E1" else "Implicit")
-            content += f"| **{code}** | {lbl} | {int(r['Total'])} | {int(r['Benar'])} | **{r['Akurasi (%)']:.2f}%** |\n"
+    for lvl, info in metrics.get("implicitness_breakdown", {}).items():
+        content += f"| **{lvl}** | {info['count']} | {info['correct']} | {info['accuracy']*100:.2f}% | {info['macro_f1']:.4f} |\n"
 
-    if "type" in taxonomy_breakdown:
-        content += "\n### B. Berdasarkan Tipe Cyberbullying (Khusus Label Positif):\n"
-        t_df = taxonomy_breakdown["type"]
-        content += "\n| Kode Tipe | Total Uji | Prediksi Benar | Akurasi (%) |\n| :--- | :---: | :---: | :---: |\n"
-        for _, r in t_df.iterrows():
-            content += f"| **{r['type']}** | {int(r['Total'])} | {int(r['Benar'])} | **{r['Akurasi (%)']:.2f}%** |\n"
+    type_bd = metrics.get("type_breakdown", {})
+    if type_bd:
+        content += "\n| Tipe Taksonomi | Jumlah | Benar | Akurasi (%) |\n| :--- | :---: | :---: | :---: |\n"
+        for t_code, info in type_bd.items():
+            content += f"| **{t_code}** | {info['count']} | {info['correct']} | {info['accuracy']*100:.2f}% |\n"
 
-    content += f"""
+    if ablation:
+        content += "\n## 4. Studi Ablasi (Test Set Identik)\n\n| Model | Accuracy | Macro-F1 | ROC-AUC | PR-AUC |\n| :--- | :---: | :---: | :---: | :---: |\n"
+        for key in ["model_a_indobertweet_only", "model_b_llm_only", "model_c_hybrid_fusion"]:
+            m = ablation.get(key)
+            if not m:
+                continue
+            if m.get("accuracy") is None:
+                content += f"| {m.get('model_name', key)} | N/A | N/A | N/A | {m.get('status', 'blocked')} |\n"
+            else:
+                content += f"| {m.get('model_name', key)} | {m['accuracy']:.4f} | {m['macro_f1']:.4f} | {m.get('roc_auc')} | {m.get('pr_auc')} |\n"
 
----
-
-## 4. Visualisasi Publikasi Tersimpan
-Grafik siap cetak (300 DPI) telah diekspor ke direktori laporan:
-- `figure_confusion_matrix.png`
-- `figure_implicitness_accuracy.png`
-
----
-*Laporan digenerate secara otomatis oleh Modul Evaluasi Disertasi Antigravity.*
-"""
-
+    content += "\n## 5. Artefak Grafik (300 DPI)\n- `figure_confusion_matrix.png`\n- `figure_implicitness_accuracy.png`\n"
     with open(md_path, "w", encoding="utf-8") as f:
         f.write(content)
-
     return md_path
 
 
 def run_full_evaluation_pipeline(
     model_dir: Path = DEFAULT_MODEL_DIR,
     test_csv: Path = DEFAULT_TEST_CSV,
-    output_dir: Path = DEFAULT_REPORT_DIR
-):
+    output_dir: Path = DEFAULT_REPORT_DIR,
+    hybrid_dir: Path = DEFAULT_HYBRID_DIR,
+) -> Dict[str, Any]:
     print("=" * 75)
-    print("🎓 MODUL EVALUASI & GENERATOR LAPORAN METRIK DISERTASI")
+    print("🎓 MODUL EVALUASI & GENERATOR LAPORAN METRIK DISERTASI (BEBAS SIMULASI)")
     print("=" * 75)
 
     if not test_csv.exists():
         raise FileNotFoundError(f"Berkas test set tidak ditemukan di: {test_csv}")
-
     df_test = pd.read_csv(test_csv)
-    print(f"📂 Berkas Test Set  : {test_csv.name} ({len(df_test):,} sampel)")
-    print(f"🎯 Direktori Laporan: {output_dir}")
+    target_source = str(df_test["target_source"].iloc[0]) if "target_source" in df_test.columns and len(df_test) > 0 else "pseudo_labeled_llm"
 
-    opt_thresh = 0.50
-    # Cek apakah model terlatih sudah ada di disk
-    if model_dir.exists() and (model_dir / "model.safetensors").exists() or (model_dir / "pytorch_model.bin").exists() or (model_dir / "config.json").exists():
-        try:
-            from scripts.evaluate_indobertweet import load_classifier
-        except ImportError:
-            from evaluate_indobertweet import load_classifier
-        print(f"\n📦 Memuat model terlatih dari: {model_dir}...")
-        model, tokenizer, device = load_classifier(model_dir)
-        val_csv_path = test_csv.parent / "val.csv"
-        opt_thresh = find_optimal_threshold(model, tokenizer, device, val_csv_path)
-        print(f"  🎯 Optimal Decision Threshold: {opt_thresh:.2f} (dioptimasi dari validation set)")
-        y_true, _, y_probs = evaluate_model_on_dataset(model, tokenizer, device, df_test)
-        y_pred = (y_probs[:, 1] >= opt_thresh).astype(int)
+    has_baseline_weights = model_dir.exists() and (
+        (model_dir / "model.safetensors").exists() or (model_dir / "pytorch_model.bin").exists()
+    )
+    if not has_baseline_weights:
+        raise FileNotFoundError(
+            f"Checkpoint baseline IndoBERTweet tidak ditemukan di '{model_dir}'. "
+            "Laporan disertasi menolak menyimulasikan metrik dari label aktual. "
+            "Jalankan 'python3 scripts/train_indobertweet.py' terlebih dahulu."
+        )
+
+    from scripts.evaluate_indobertweet import load_classifier
+
+    model, tokenizer, device = load_classifier(model_dir)
+    manifest = load_model_manifest(model_dir) or load_model_manifest(model_dir.parent)
+    if manifest and manifest.get("optimal_threshold") is not None:
+        opt_thresh = float(manifest["optimal_threshold"])
     else:
-        print("\nℹ️ [Mode Simulasi Baseline]: Bobot model terlatih belum ditemukan di disk.")
-        print("   Menggunakan probabilitas confidence LLM dari dataset untuk validasi format laporan.")
-        y_true = df_test["label"].to_numpy()
-        # Simulasi probabilitas menggunakan confidence yang sudah dinormalisasi
-        conf_vals = df_test["confidence"].astype(float).to_numpy()
-        probs_cb = np.where(y_true == 1, conf_vals, 1.0 - conf_vals)
-        probs_cb = np.clip(probs_cb, 0.05, 0.95)
-        probs_non_cb = 1.0 - probs_cb
-        y_probs = np.column_stack([probs_non_cb, probs_cb])
-        y_pred = np.argmax(y_probs, axis=1)
+        val_csv = test_csv.parent / "val.csv"
+        if val_csv.exists():
+            _, val_probs = evaluate_baseline_model_probs(model, tokenizer, device, pd.read_csv(val_csv))
+            opt_thresh, _, _ = find_optimal_threshold_on_val(val_probs, pd.read_csv(val_csv)["label"].to_numpy())
+        else:
+            opt_thresh = 0.50
 
-    # Tambahkan hasil prediksi ke dataframe untuk analisis breakdown
-    df_eval = df_test.copy()
-    df_eval["pred"] = y_pred
-    df_eval["prob_cb"] = y_probs[:, 1]
+    y_true, y_prob_pos = evaluate_baseline_model_probs(model, tokenizer, device, df_test)
+    metrics = compute_comprehensive_classification_metrics(
+        y_true=y_true,
+        y_prob_pos=y_prob_pos,
+        threshold=opt_thresh,
+        df_meta=df_test,
+    )
+    metrics["target_source"] = target_source
 
-    # Hitung metrik komprehensif
-    print("\n📊 Menghitung Metrik Komprehensif Disertasi...")
-    metrics = calculate_comprehensive_metrics(y_true, y_pred, y_probs)
-    metrics["optimal_threshold"] = opt_thresh
-    y_pred_def = (y_probs[:, 1] >= 0.50).astype(int)
-    metrics["baseline_accuracy"] = round(float(accuracy_score(y_true, y_pred_def)), 4)
-    _, _, f1_def, _ = precision_recall_fscore_support(y_true, y_pred_def, average="macro", zero_division=0)
-    metrics["baseline_macro_f1"] = round(float(f1_def), 4)
+    ablation_path = hybrid_dir / "ablation_comparison.json"
+    ablation = None
+    if ablation_path.exists():
+        with open(ablation_path, "r", encoding="utf-8") as f:
+            ablation = json.load(f)
 
-    # Hitung breakdown taksonomi
-    print("🔬 Menganalisis Rincian Performa Multi-Dimensi (E0/E1/E2, Tipe, Severity)...")
-    taxonomy_breakdown = analyze_taxonomy_breakdown(df_eval)
-
-    # Output metrik ke terminal
-    print("\n" + "-" * 55)
-    print(f"  • Akurasi (Accuracy)   : {metrics['accuracy']*100:.2f}%")
-    print(f"  • Macro F1-Score       : {metrics['macro_f1']:.4f}")
-    print(f"  • Weighted F1-Score    : {metrics['weighted_f1']:.4f}")
-    print(f"  • Macro Precision      : {metrics['macro_precision']:.4f}")
-    print(f"  • Macro Recall         : {metrics['macro_recall']:.4f}")
-    print(f"  • Area Under ROC (AUC) : {metrics['roc_auc']:.4f}")
-    print("-" * 55)
-
-    # Simpan Laporan JSON
     output_dir.mkdir(parents=True, exist_ok=True)
-    json_path = output_dir / "metrics_summary.json"
-    with open(json_path, "w", encoding="utf-8") as f:
-        json.dump(metrics, f, indent=2)
-    print(f"\n💾 1. Metrik JSON tersimpan   : {json_path.name}")
+    with open(output_dir / "metrics_summary.json", "w", encoding="utf-8") as f:
+        json.dump(metrics, f, indent=2, ensure_ascii=False)
 
-    # Simpan Laporan Markdown
-    md_path = generate_markdown_report(metrics, taxonomy_breakdown, output_dir)
-    print(f"📄 2. Laporan Markdown        : {md_path.name}")
-
-    # Simpan Kode Tabel LaTeX
-    latex_str = generate_latex_tables(metrics, taxonomy_breakdown)
-    latex_path = output_dir / "dissertation_tables.tex"
-    with open(latex_path, "w", encoding="utf-8") as f:
+    generate_markdown_report(metrics, target_source, ablation, output_dir)
+    latex_str = generate_latex_tables(metrics, ablation)
+    with open(output_dir / "dissertation_tables.tex", "w", encoding="utf-8") as f:
         f.write(latex_str)
-    print(f"📝 3. Kode Tabel LaTeX        : {latex_path.name}")
 
-    # Buat Visualisasi Grafik
-    cm = np.array(metrics["confusion_matrix"])
-    plot_publication_figures(cm, taxonomy_breakdown, output_dir)
-    print(f"📊 4. Grafik Gambar (300 DPI) : figure_confusion_matrix.png & figure_implicitness_accuracy.png")
-
-    print("\n" + "=" * 75)
-    print("🎉 LANGKAH 3 SELESAI: ARTEFAK EVALUASI & TABEL DISERTASI TELAH SIAP LENGKAP!")
-    print("=" * 75)
+    plot_publication_figures(metrics, output_dir)
+    print(f"✅ Laporan & tabel disertasi tersimpan di: {output_dir}")
+    return metrics
 
 
 def main():
@@ -514,13 +378,14 @@ def main():
     parser.add_argument("--model_dir", type=str, default=str(DEFAULT_MODEL_DIR))
     parser.add_argument("--test_csv", type=str, default=str(DEFAULT_TEST_CSV))
     parser.add_argument("--output_dir", type=str, default=str(DEFAULT_REPORT_DIR))
-
+    parser.add_argument("--hybrid_dir", type=str, default=str(DEFAULT_HYBRID_DIR))
     args = parser.parse_args()
 
     run_full_evaluation_pipeline(
         model_dir=Path(args.model_dir),
         test_csv=Path(args.test_csv),
-        output_dir=Path(args.output_dir)
+        output_dir=Path(args.output_dir),
+        hybrid_dir=Path(args.hybrid_dir),
     )
 
 

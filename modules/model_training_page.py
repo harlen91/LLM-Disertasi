@@ -15,26 +15,34 @@ PROJECT_DIR = MODULE_DIR.parent
 if str(PROJECT_DIR) not in sys.path:
     sys.path.insert(0, str(PROJECT_DIR))
 
-from scripts.curate_dataset import curate_and_normalize
-from scripts.evaluate_indobertweet import load_classifier, predict_text
-from scripts.generate_dissertation_report import (
-    run_full_evaluation_pipeline,
-    generate_latex_tables,
-    calculate_comprehensive_metrics,
-    analyze_taxonomy_breakdown
+from config import (
+    DEFAULT_RANDOM_SEED,
+    DEFAULT_SUMOPOD_MODEL,
+    EVAL_REPORT_DIR,
+    FINAL_DIR,
+    MODELS_DIR,
 )
-from scripts.train_hybrid_fusion import train_hybrid_pipeline
-from scripts.evaluate_dual_xai import evaluate_dual_xai_benchmark
-from config import DEFAULT_SUMOPOD_MODEL
-from core.fusion_model import load_hybrid_classifier, predict_hybrid_text
-from core.shap_explainer import HybridSHAPExplainer, align_shap_with_cot
+from core.data_understanding import extract_teacher_annotation_features
+from core.evaluation_metrics import load_model_manifest
+from core.fusion_model import load_hybrid_classifier_with_manifest, predict_hybrid_text
 from core.model_engine import run_single_annotation
+from core.shap_explainer import (
+    HybridSHAPExplainer,
+    align_shap_with_cot,
+    compute_faithfulness_comprehensiveness,
+)
+from data_manager.dataset_handler import sanitize_html_text
+from scripts.curate_dataset import curate_and_normalize
+from scripts.evaluate_dual_xai import evaluate_dual_xai_benchmark
+from scripts.evaluate_indobertweet import get_saved_threshold, load_classifier, predict_text
+from scripts.generate_dissertation_report import run_full_evaluation_pipeline
+from scripts.train_hybrid_fusion import train_hybrid_pipeline
+from scripts.train_indobertweet import train_model as train_baseline_model
 
-FINAL_DIR = PROJECT_DIR / "output" / "final"
 CHECKPOINT_FILE = PROJECT_DIR / "output" / "checkpoints" / "checkpoint_Dataset-Research.csv"
-MODEL_DIR = PROJECT_DIR / "output" / "models" / "indobertweet_cyberbullying"
-HYBRID_MODEL_DIR = PROJECT_DIR / "output" / "models" / "hybrid_fusion_indobertweet"
-REPORT_DIR = PROJECT_DIR / "output" / "evaluation_report"
+MODEL_DIR = MODELS_DIR / "indobertweet_cyberbullying"
+HYBRID_MODEL_DIR = MODELS_DIR / "hybrid_fusion_indobertweet"
+REPORT_DIR = EVAL_REPORT_DIR
 
 
 def render_model_training_page():
@@ -76,6 +84,23 @@ def render_model_training_page():
                 st.metric("Data Uji (Test 10%)", f"{len(df_test):,} baris")
             with c4:
                 st.metric("Status Kurasi", "✅ Siap Dilatih")
+            ds_manifest_file = FINAL_DIR / "dataset_manifest.json"
+            if ds_manifest_file.exists():
+                try:
+                    with open(ds_manifest_file, "r", encoding="utf-8") as mf:
+                        dm = json.load(mf)
+                    lbl_src = dm.get("label_source", "pseudo_labeled_llm")
+                    leak_dict = dm.get("splits", {}).get("cross_split_leakage_check", {})
+                    total_overlap = sum(
+                        sum(inner.values()) for inner in leak_dict.values() if isinstance(inner, dict)
+                    )
+                    st.caption(
+                        f"📋 Dataset Manifest: `{dm.get('dataset_version', '-')}` | "
+                        f"Status Label: **`{lbl_src}`** | "
+                        f"Cross-Split Overlap: `{total_overlap}`"
+                    )
+                except Exception:
+                    pass
         else:
             with c1:
                 st.metric("Data Latih", "Belum ada")
@@ -206,9 +231,16 @@ def render_model_training_page():
                         epochs=epochs,
                         batch_size=batch_size,
                         lr_transformer=learning_rate,
-                        lr_heads=1e-4
+                        lr_heads=1e-4,
+                        baseline_model_dir=MODEL_DIR / "best_model",
                     )
-                    
+                    if ((MODEL_DIR / "best_model" / "model.safetensors").exists() or (MODEL_DIR / "best_model" / "pytorch_model.bin").exists()):
+                        run_full_evaluation_pipeline(
+                            model_dir=MODEL_DIR / "best_model",
+                            test_csv=test_path,
+                            output_dir=REPORT_DIR,
+                            hybrid_dir=HYBRID_MODEL_DIR,
+                        )
                     pbar.progress(1.0)
                     status_box.success("🎉 Pelatihan & Evaluasi Dual-Stream Hybrid Fusion Berhasil Selesai!")
                     st.balloons()
@@ -217,103 +249,30 @@ def render_model_training_page():
                 except Exception as e:
                     st.error(f"❌ Terjadi kesalahan selama pelatihan Hybrid Fusion: {str(e)}")
             else:
-                status_box.info("🧠 Menginisialisasi tokenizer dan mengunduh bobot IndoBERTweet Baseline...")
+                status_box.info("🧠 Menjalankan fine-tuning IndoBERTweet Baseline (Train -> Val Threshold Tuning -> Test Eval)...")
                 try:
-                    import transformers
-                    from transformers import (
-                        AutoTokenizer, AutoModelForSequenceClassification,
-                        Trainer, TrainingArguments, EarlyStoppingCallback,
-                        TrainerCallback, set_seed
-                    )
-                    from scripts.train_indobertweet import CyberbullyingDataset, compute_metrics, FocalLossTrainer
-
-                    set_seed(42)
-                    device = "mps" if torch.backends.mps.is_available() else ("cuda" if torch.cuda.is_available() else "cpu")
-
-                    tokenizer = AutoTokenizer.from_pretrained(base_model)
-                    model = AutoModelForSequenceClassification.from_pretrained(
-                        base_model,
-                        num_labels=2,
-                        id2label={0: "NON_CYBERBULLYING", 1: "CYBERBULLYING"},
-                        label2id={"NON_CYBERBULLYING": 0, "CYBERBULLYING": 1}
-                    )
-
-                    train_conf = df_train["confidence"] if "confidence" in df_train.columns else None
-                    val_conf = df_val["confidence"] if "confidence" in df_val.columns else None
-
-                    train_ds = CyberbullyingDataset(df_train["comment"], df_train["label"], tokenizer, max_len, confidences=train_conf)
-                    val_ds = CyberbullyingDataset(df_val["comment"], df_val["label"], tokenizer, max_len, confidences=val_conf)
-
-                    output_dir = MODEL_DIR
-                    checkpoints_dir = output_dir / "checkpoints"
-                    best_model_dir = output_dir / "best_model"
-
-                    class StreamlitProgressCallback(TrainerCallback):
-                        def on_epoch_end(self, args, state, control, **kwargs):
-                            ep = int(state.epoch)
-                            p = min(1.0, ep / epochs)
-                            pbar.progress(p)
-                            status_box.markdown(f"**Sedang Melatih:** Epoch `{ep}/{epochs}` selesai | Global Step: `{state.global_step}/{state.max_steps}`")
-
-                    eval_arg_name = "eval_strategy" if hasattr(TrainingArguments, "eval_strategy") else "evaluation_strategy"
-                    eval_kwargs = {eval_arg_name: "epoch"}
-
-                    training_args = TrainingArguments(
-                        output_dir=str(checkpoints_dir),
-                        num_train_epochs=epochs,
-                        per_device_train_batch_size=batch_size,
-                        per_device_eval_batch_size=batch_size * 2,
+                    pbar.progress(0.2)
+                    train_baseline_model(
+                        train_path=train_path,
+                        val_path=val_path,
+                        test_path=test_path,
+                        output_dir=MODEL_DIR,
+                        model_name=base_model,
+                        epochs=epochs,
+                        batch_size=batch_size,
                         learning_rate=learning_rate,
-                        weight_decay=0.01,
-                        warmup_ratio=0.1,
-                        save_strategy="epoch",
-                        save_total_limit=1,
-                        load_best_model_at_end=True,
-                        metric_for_best_model="macro_f1",
-                        greater_is_better=True,
-                        seed=42,
-                        dataloader_pin_memory=False if device == "mps" else True,
-                        report_to="none",
-                        **eval_kwargs
+                        max_length=max_len,
+                        seed=DEFAULT_RANDOM_SEED,
+                        use_focal_loss=("Focal Loss" in loss_choice),
                     )
-
-                    if "Focal Loss" in loss_choice:
-                        trainer = FocalLossTrainer(
-                            model=model,
-                            args=training_args,
-                            train_dataset=train_ds,
-                            eval_dataset=val_ds,
-                            tokenizer=tokenizer,
-                            compute_metrics=compute_metrics,
-                            callbacks=[EarlyStoppingCallback(early_stopping_patience=2), StreamlitProgressCallback()],
-                            focal_alpha=0.55,
-                            focal_gamma=2.0
-                        )
-                    else:
-                        trainer = Trainer(
-                            model=model,
-                            args=training_args,
-                            train_dataset=train_ds,
-                            eval_dataset=val_ds,
-                            tokenizer=tokenizer,
-                            compute_metrics=compute_metrics,
-                            callbacks=[EarlyStoppingCallback(early_stopping_patience=2), StreamlitProgressCallback()]
-                        )
-
-                    status_box.markdown(f"**⚡ Melatih pada {len(df_train)} sampel ({epochs} Epochs)...**")
-                    trainer.train()
-
-                    status_box.info("💾 Menyimpan model terbaik ke disk...")
-                    trainer.save_model(str(best_model_dir))
-                    tokenizer.save_pretrained(str(best_model_dir))
-
-                    status_box.info("📊 Menjalankan evaluasi pada Independent Test Set...")
+                    pbar.progress(0.8)
+                    status_box.info("📊 Memperbarui laporan & tabel evaluasi disertasi...")
                     run_full_evaluation_pipeline(
-                        model_dir=best_model_dir,
+                        model_dir=MODEL_DIR / "best_model",
                         test_csv=test_path,
-                        output_dir=REPORT_DIR
+                        output_dir=REPORT_DIR,
+                        hybrid_dir=HYBRID_MODEL_DIR,
                     )
-
                     pbar.progress(1.0)
                     status_box.success("🎉 Pelatihan & Evaluasi IndoBERTweet Baseline Berhasil Selesai!")
                     st.balloons()
@@ -321,7 +280,6 @@ def render_model_training_page():
 
                 except Exception as e:
                     st.error(f"❌ Terjadi kesalahan selama pelatihan: {str(e)}")
-                st.error(f"❌ Terjadi kesalahan selama pelatihan: {str(e)}")
 
     # =========================================================================
     # TAB 2: EVALUASI & TABEL LATEX BAB 4
@@ -333,234 +291,338 @@ def render_model_training_page():
         tex_report = REPORT_DIR / "dissertation_tables.tex"
         
         if not json_report.exists():
-            st.info("Laporan evaluasi belum digenerate. Silakan latih model terlebih dahulu atau klik tombol di bawah untuk membuat evaluasi baseline.")
+            st.info("Laporan evaluasi belum digenerate. Silakan latih model terlebih dahulu atau klik tombol di bawah untuk membuat evaluasi dari checkpoint terlatih.")
             if st.button("📊 Generate Laporan Evaluasi Sekarang"):
                 with st.spinner("Menghitung metrik evaluasi..."):
-                    run_full_evaluation_pipeline(output_dir=REPORT_DIR)
-                    st.rerun()
-            return
-
-        col_t_title, col_t_btn = st.columns([3, 1])
-        with col_t_btn:
-            if st.button("🔄 Evaluasi Ulang Test Set", use_container_width=True):
-                with st.spinner("Mengevaluasi model pada test set..."):
-                    best_model_path = MODEL_DIR / "best_model"
-                    test_csv_path = FINAL_DIR / "test.csv"
-                    run_full_evaluation_pipeline(
-                        model_dir=best_model_path,
-                        test_csv=test_csv_path,
-                        output_dir=REPORT_DIR
-                    )
-                    st.success("Evaluasi berhasil diperbarui!")
-                    st.rerun()
-
-        with open(json_report, "r", encoding="utf-8") as f:
-            metrics_data = json.load(f)
-
-        # 1. High-level Metrics Cards
-        opt_th = metrics_data.get("optimal_threshold", 0.50)
-        base_acc = metrics_data.get("baseline_accuracy", metrics_data.get("accuracy", 0))
-        delta_acc = (metrics_data.get('accuracy', 0) - base_acc) * 100
-
-        m1, m2, m3, m4, m5 = st.columns(5)
-        with m1:
-            st.metric("Akurasi (Accuracy)", f"{metrics_data.get('accuracy', 0)*100:.2f}%", delta=f"+{delta_acc:.2f}% vs Base" if delta_acc > 0 else None)
-        with m2:
-            st.metric("Threshold Optimal (τ*)", f"{opt_th:.2f}")
-        with m3:
-            st.metric("Macro F1-Score", f"{metrics_data.get('macro_f1', 0):.4f}")
-        with m4:
-            st.metric("Weighted F1", f"{metrics_data.get('weighted_f1', 0):.4f}")
-        with m5:
-            st.metric("Area ROC (AUC)", f"{metrics_data.get('roc_auc', 0):.4f}")
-
-        # 2. Confusion Matrix & Implicitness Visualizations
-        st.markdown("---")
-        st.markdown("### 📈 Visualisasi Publikasi Ilmiah")
-        v_col1, v_col2 = st.columns(2)
-
-        with v_col1:
-            st.markdown("#### Matriks Konfusi (Confusion Matrix)")
-            cm_arr = np.array(metrics_data.get("confusion_matrix", [[0, 0], [0, 0]]))
-            fig_cm = px.imshow(
-                cm_arr,
-                text_auto=True,
-                x=["Pred: Non-CB", "Pred: Cyberbullying"],
-                y=["Aktual: Non-CB", "Aktual: Cyberbullying"],
-                color_continuous_scale="Blues",
-                labels=dict(x="Prediksi", y="Aktual", color="Jumlah")
-            )
-            fig_cm.update_layout(height=360)
-            st.plotly_chart(fig_cm, use_container_width=True)
-
-        with v_col2:
-            st.markdown("#### Analisis Ketahanan pada Ujaran Tersirat")
-            if test_path.exists():
-                test_df = pd.read_csv(test_path)
-                imp_counts = test_df["implicit_level"].value_counts().reset_index()
-                imp_counts.columns = ["Tingkat", "Jumlah"]
-                imp_counts["Deskripsi"] = imp_counts["Tingkat"].map({
-                    "E0": "E0 (Sangat Eksplisit)",
-                    "E1": "E1 (Semi-Tersirat)",
-                    "E2": "E2 (Tersirat / Kontekstual)"
-                }).fillna(imp_counts["Tingkat"])
-
-                fig_imp = px.bar(
-                    imp_counts, x="Deskripsi", y="Jumlah",
-                    color="Deskripsi",
-                    color_discrete_sequence=px.colors.qualitative.Prism,
-                    title="Distribusi Sampel Uji per Keterbukaan"
-                )
-                fig_imp.update_layout(height=360, showlegend=False)
-                st.plotly_chart(fig_imp, use_container_width=True)
-
-        # 2b. Benchmark Komparatif Disertasi (Single-Stream vs Dual-Stream Hybrid Fusion)
-        hybrid_json = HYBRID_MODEL_DIR / "hybrid_test_metrics.json"
-        if hybrid_json.exists():
-            st.markdown("---")
-            st.markdown("### 🏛️ Tabel Komparasi Empiris Bab 4: Single Transformer vs Dual-Stream Hybrid Fusion")
-            st.caption("Perbandingan kuantitatif antara model baseline (IndoBERTweet tunggal) dengan model usulan disertasi (Dual-Stream Hybrid Fusion IndoBERTweet + SumoPod LLM Knowledge Representation).")
-
-            try:
-                with open(hybrid_json, "r", encoding="utf-8") as f:
-                    hyb_data = json.load(f)
-                hyb_test = hyb_data.get("test_metrics", {})
-                hyb_cm = hyb_test.get("confusion_matrix", {})
-
-                base_fp = metrics_data.get("confusion_matrix", [[0,0],[0,0]])[0][1]
-                hyb_fp = hyb_cm.get("fp", 0)
-
-                bench_records = [
-                    {
-                        "Arsitektur Model": "🔷 IndoBERTweet Baseline (Single-Stream)",
-                        "Akurasi": f"{metrics_data.get('accuracy', 0)*100:.2f}%",
-                        "Macro F1": f"{metrics_data.get('macro_f1', 0):.4f}",
-                        "ROC-AUC": f"{metrics_data.get('roc_auc', 0):.4f}",
-                        "False Positives (FP)": f"{base_fp} sampel",
-                        "Multi-Task Output": "Hanya Binary Cyberbullying",
-                        "Gating Weight (z)": "1.000 (100% Leksikal)"
-                    },
-                    {
-                        "Arsitektur Model": "🛡️ Dual-Stream Hybrid Fusion (IndoBERTweet + SumoPod)",
-                        "Akurasi": f"{hyb_test.get('accuracy', 0)*100:.2f}%",
-                        "Macro F1": f"{hyb_test.get('macro_f1', 0):.4f}",
-                        "ROC-AUC": f"{hyb_test.get('roc_auc', 0):.4f}",
-                        "False Positives (FP)": f"{hyb_fp} sampel",
-                        "Multi-Task Output": f"6 Dimensi (Tipe: {hyb_test.get('type_accuracy', 0)*100:.1f}%, Emosi: {hyb_test.get('emotion_accuracy', 0)*100:.1f}%)",
-                        "Gating Weight (z)": f"{hyb_test.get('mean_gating_z', 0.466):.4f} (Fusi Adaptif)"
-                    }
-                ]
-
-                bench_df = pd.DataFrame(bench_records)
-                st.dataframe(bench_df, use_container_width=True, hide_index=True)
-
-                st.markdown(
-                    f"""
-                    <div style="background-color: #f1f5f9; border-left: 4px solid #4338ca; padding: 14px 18px; border-radius: 6px; margin-top: 10px;">
-                        <strong style="color: #1e1b4b;">💡 Temuan Akademis Bab 4:</strong>
-                        <p style="margin: 6px 0 0 0; font-size: 14px; color: #334155; line-height: 1.6;">
-                            Model <strong>Dual-Stream Hybrid Fusion</strong> berhasil menyeimbangkan representasi leksikal IndoBERTweet dengan penalaran kultural SumoPod LLM (nilai gerbang fusi <code>z = {hyb_test.get('mean_gating_z', 0.466):.3f}</code>). 
-                            Model ini tidak hanya meningkatkan akurasi deteksi perundungan siber, tetapi juga memprediksi taksonomi multi-dimensi secara simultan (Akurasi Tipe Bullying: <strong>{hyb_test.get('type_accuracy', 0)*100:.1f}%</strong>, Akurasi Emosi: <strong>{hyb_test.get('emotion_accuracy', 0)*100:.1f}%</strong>).
-                        </p>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
-            except Exception as e:
-                st.caption(f"Info metrik hybrid: {e}")
-
-        # 2c. Evaluasi Empiris Dual Explainability (SHAP vs CoT Rationale)
-        dual_xai_json = REPORT_DIR / "dual_xai_evaluation.json"
-        dual_xai_tex = REPORT_DIR / "table_dual_xai_breakdown.tex"
-
-        if dual_xai_json.exists():
-            st.markdown("---")
-            col_dx_t, col_dx_b = st.columns([3, 1])
-            with col_dx_t:
-                st.markdown("### 🔬 Evaluasi Empiris Dual-XAI: Keselarasan Token SHAP ⟷ SumoPod LLM CoT")
-                st.caption("Pilar Disertasi (Explainability): Mengukur konsistensi antara atribusi fitur token kuantitatif (SHAP) dan penalaran kualitatif (SumoPod LLM CoT) pada 150 sampel data uji independen.")
-            with col_dx_b:
-                if st.button("🔄 Evaluasi Ulang Dual-XAI (150 Sampel)", use_container_width=True):
-                    with st.spinner("Menghitung atribusi SHAP & keselarasan CoT di seluruh test set..."):
-                        evaluate_dual_xai_benchmark(
-                            test_csv_path=FINAL_DIR / "test.csv",
-                            model_path=MODEL_DIR / "best_model",
-                            output_dir=REPORT_DIR
-                        )
-                        st.success("Evaluasi Dual-XAI berhasil diperbarui!")
+                    try:
+                        run_full_evaluation_pipeline(output_dir=REPORT_DIR, hybrid_dir=HYBRID_MODEL_DIR)
                         st.rerun()
+                    except Exception as e:
+                        st.error(f"Gagal menghasilkan laporan evaluasi: {e}")
+        else:
+            col_t_title, col_t_btn = st.columns([3, 1])
+            with col_t_btn:
+                if st.button("🔄 Evaluasi Ulang Test Set", use_container_width=True):
+                    with st.spinner("Mengevaluasi model pada test set..."):
+                        try:
+                            run_full_evaluation_pipeline(
+                                model_dir=MODEL_DIR / "best_model",
+                                test_csv=FINAL_DIR / "test.csv",
+                                output_dir=REPORT_DIR,
+                                hybrid_dir=HYBRID_MODEL_DIR,
+                            )
+                            st.success("Evaluasi berhasil diperbarui!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Gagal memperbarui evaluasi: {e}")
 
-            try:
-                with open(dual_xai_json, "r", encoding="utf-8") as f:
-                    dx_data = json.load(f)
+            with open(json_report, "r", encoding="utf-8") as f:
+                metrics_data = json.load(f)
 
-                dx_glob = dx_data.get("global_metrics", {})
-                dx_impl = dx_data.get("implicitness_breakdown", {})
-
-                # Kartu Metrik Dual-XAI
-                dx1, dx2, dx3, dx4 = st.columns(4)
-                with dx1:
-                    st.metric("Rata-rata Keselarasan (Mean Alignment)", f"{dx_glob.get('mean_alignment_score', 0):.2f}%")
-                with dx2:
-                    st.metric("Tingkat Konsistensi Global (≥ 50%)", f"{dx_glob.get('alignment_rate_percentage', 0):.2f}%")
-                with dx3:
-                    st.metric("Keselarasan Semi-Tersirat (E1)", f"{dx_impl.get('E1', {}).get('mean_alignment', 0):.2f}%")
-                with dx4:
-                    st.metric("Keselarasan Tersirat Kultural (E2)", f"{dx_impl.get('E2', {}).get('mean_alignment', 0):.2f}%")
-
-                # Visualisasi Grafik Keselarasan per Implicitness Level
-                impl_df = pd.DataFrame([
-                    {"Tingkat": "E0 (Sangat Eksplisit)", "Rata-rata Keselarasan (%)": dx_impl.get("E0", {}).get("mean_alignment", 0), "Konsistensi (%)": dx_impl.get("E0", {}).get("alignment_rate", 0), "Jumlah Sampel": dx_impl.get("E0", {}).get("count", 0)},
-                    {"Tingkat": "E1 (Semi-Tersirat)", "Rata-rata Keselarasan (%)": dx_impl.get("E1", {}).get("mean_alignment", 0), "Konsistensi (%)": dx_impl.get("E1", {}).get("alignment_rate", 0), "Jumlah Sampel": dx_impl.get("E1", {}).get("count", 0)},
-                    {"Tingkat": "E2 (Tersirat Kultural)", "Rata-rata Keselarasan (%)": dx_impl.get("E2", {}).get("mean_alignment", 0), "Konsistensi (%)": dx_impl.get("E2", {}).get("alignment_rate", 0), "Jumlah Sampel": dx_impl.get("E2", {}).get("count", 0)}
-                ])
-
-                fig_dx = px.bar(
-                    impl_df,
-                    x="Tingkat",
-                    y="Rata-rata Keselarasan (%)",
-                    color="Tingkat",
-                    text_auto=".1f",
-                    color_discrete_sequence=["#3b82f6", "#8b5cf6", "#ec4899"],
-                    title="Konsistensi Dual-XAI Berdasarkan Tingkat Keterbukaan Ujaran (Implicitness)"
-                )
-                fig_dx.update_layout(height=340, showlegend=False)
-                st.plotly_chart(fig_dx, use_container_width=True)
-
-                st.markdown(
-                    """
-                    <div style="background-color: #fdf4ff; border-left: 4px solid #c026d3; padding: 14px 18px; border-radius: 6px; margin-top: 6px;">
-                        <strong style="color: #701a75;">💡 Temuan Akademis Explainability (Bab 4):</strong>
-                        <p style="margin: 6px 0 0 0; font-size: 14px; color: #4a044e; line-height: 1.6;">
-                            Hasil empiris membuktikan bahwa semakin tinggi tingkat keterbukaan ujaran (dari <strong>E0 = 32.8%</strong> ke <strong>E1 = 53.0%</strong> dan <strong>E2 = 100.0%</strong>), semakin tinggi keselarasan antara token berkontribusi SHAP dengan argumen penalaran SumoPod LLM. Hal ini memvalidasi hipotesis disertasi: <em>ujaran perundungan tersirat memerlukan penalaran semantik kultural untuk dapat dijelaskan secara transparan</em>.
-                        </p>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
+            target_src = metrics_data.get("target_source", "pseudo_labeled_llm")
+            if target_src == "human_ground_truth":
+                st.success("✅ **Status Label Uji: `human_ground_truth`** — Evaluasi dijalankan terhadap label manusia tervalidasi secara independen.")
+            else:
+                st.warning(
+                    "⚠️ **Status Label Uji: `pseudo_labeled_llm`** — Dataset uji belum memiliki kolom ground truth manusia yang tervalidasi. "
+                    "Metrik ini mengukur kesepakatan/distilasi terhadap pseudo-label LLM secara bebas kebocoran (*modality-masked*), "
+                    "bukan akurasi terhadap gold standard manusia."
                 )
 
-            except Exception as e:
-                st.caption(f"Info visualisasi Dual-XAI: {e}")
+            opt_th = float(metrics_data.get("threshold", metrics_data.get("optimal_threshold", 0.50)))
+            m1, m2, m3, m4, m5 = st.columns(5)
+            with m1:
+                st.metric("Akurasi (Accuracy)", f"{metrics_data.get('accuracy', 0)*100:.2f}%")
+            with m2:
+                st.metric("Threshold Val (τ*)", f"{opt_th:.2f}")
+            with m3:
+                st.metric("Macro F1-Score", f"{metrics_data.get('macro_f1', 0):.4f}")
+            with m4:
+                roc_val = metrics_data.get("roc_auc")
+                st.metric("ROC-AUC", f"{roc_val:.4f}" if roc_val is not None else "N/A")
+            with m5:
+                pr_val = metrics_data.get("pr_auc")
+                st.metric("PR-AUC", f"{pr_val:.4f}" if pr_val is not None else "N/A")
 
-        # 3. LaTeX Tables Generator
-        st.markdown("---")
-        st.markdown("### 📝 Kode LaTeX Bab 4 (Hasil & Pembahasan)")
-        st.caption("Salin kode LaTeX berikut langsung ke dalam dokumen overleaf/naskah disertasi Anda:")
+            cal = metrics_data.get("calibration", {})
+            ea = metrics_data.get("error_analysis", {})
+            ci95 = metrics_data.get("confidence_intervals_95", {})
+            c_sub1, c_sub2, c_sub3, c_sub4 = st.columns(4)
+            with c_sub1:
+                st.metric("Weighted F1", f"{metrics_data.get('weighted_f1', 0):.4f}")
+            with c_sub2:
+                ece_v = cal.get("ece")
+                st.metric("Calibration ECE / MCE", f"{ece_v:.4f} / {cal.get('mce', 0):.4f}" if ece_v is not None else "N/A")
+            with c_sub3:
+                brier_v = cal.get("brier_score")
+                st.metric("Brier / Log-Loss", f"{brier_v:.4f} / {cal.get('log_loss', 0):.4f}" if brier_v is not None else "N/A")
+            with c_sub4:
+                st.metric(
+                    "FPR / FNR",
+                    f"{ea.get('false_positive_rate', 0)*100:.1f}% / {ea.get('false_negative_rate', 0)*100:.1f}%",
+                    help=f"FP={ea.get('false_positive_count', 0)}, FN={ea.get('false_negative_count', 0)}",
+                )
+            if ci95.get("macro_f1"):
+                st.caption(f"📏 **Bootstrap 95% CI**: Accuracy={ci95.get('accuracy')}, Macro-F1={ci95.get('macro_f1')}, ROC-AUC={ci95.get('roc_auc')}")
 
-        tab_tex1, tab_tex2 = st.tabs(["📄 Tabel Metrik Klasifikasi", "🔬 Tabel Konsistensi Dual-XAI"])
-        with tab_tex1:
-            if tex_report.exists():
-                with open(tex_report, "r", encoding="utf-8") as f:
-                    st.code(f.read(), language="latex")
+            # 2. Confusion Matrix & Implicitness Visualizations
+            st.markdown("---")
+            st.markdown("### 📈 Visualisasi Publikasi Ilmiah")
+            v_col1, v_col2 = st.columns(2)
+
+            cm_dict = metrics_data.get("confusion_matrix", {})
+            if "confusion_matrix_2x2" in metrics_data:
+                cm_arr = np.array(metrics_data["confusion_matrix_2x2"])
+            elif isinstance(cm_dict, dict):
+                cm_arr = np.array([[cm_dict.get("tn", 0), cm_dict.get("fp", 0)], [cm_dict.get("fn", 0), cm_dict.get("tp", 0)]])
+            elif isinstance(cm_dict, list):
+                cm_arr = np.array(cm_dict)
             else:
-                st.info("Kode LaTeX klasifikasi sedang dipersiapkan...")
+                cm_arr = np.zeros((2, 2), dtype=int)
+            base_fp = int(cm_arr[0][1])
 
-        with tab_tex2:
-            if dual_xai_tex.exists():
-                with open(dual_xai_tex, "r", encoding="utf-8") as f:
-                    st.code(f.read(), language="latex")
-            else:
-                st.info("Kode LaTeX Dual-XAI sedang dipersiapkan...")
+            with v_col1:
+                st.markdown("#### Matriks Konfusi (Confusion Matrix)")
+                fig_cm = px.imshow(
+                    cm_arr,
+                    text_auto=True,
+                    x=["Pred: Non-CB", "Pred: Cyberbullying"],
+                    y=["Aktual: Non-CB", "Aktual: Cyberbullying"],
+                    color_continuous_scale="Blues",
+                    labels=dict(x="Prediksi", y="Aktual", color="Jumlah"),
+                )
+                fig_cm.update_layout(height=360)
+                st.plotly_chart(fig_cm, use_container_width=True)
+
+            with v_col2:
+                st.markdown("#### Kinerja Empiris per Tingkat Keterbukaan (E0/E1/E2)")
+                imp_bd = metrics_data.get("implicitness_breakdown", {})
+                if imp_bd:
+                    imp_rows = []
+                    label_map = {
+                        "E0": "E0 (Sangat Eksplisit)",
+                        "E1": "E1 (Semi-Tersirat)",
+                        "E2": "E2 (Tersirat / Kontekstual)",
+                    }
+                    for lvl, info in imp_bd.items():
+                        imp_rows.append(
+                            {
+                                "Deskripsi": label_map.get(lvl, lvl),
+                                "Akurasi (%)": round(float(info.get("accuracy", 0.0)) * 100, 2),
+                                "Macro-F1": round(float(info.get("macro_f1", 0.0)), 4),
+                                "Sampel": int(info.get("count", 0)),
+                            }
+                        )
+                    fig_imp = px.bar(
+                        pd.DataFrame(imp_rows),
+                        x="Deskripsi",
+                        y="Akurasi (%)",
+                        text_auto=".1f",
+                        hover_data=["Macro-F1", "Sampel"],
+                        color="Deskripsi",
+                        color_discrete_sequence=px.colors.qualitative.Prism,
+                        title="Akurasi Baseline per Tingkat Keterbukaan Ujaran",
+                    )
+                    fig_imp.update_layout(height=360, showlegend=False)
+                    st.plotly_chart(fig_imp, use_container_width=True)
+                elif test_path.exists():
+                    test_df = pd.read_csv(test_path)
+                    imp_col = "target_implicit_level" if "target_implicit_level" in test_df.columns else "implicit_level"
+                    imp_counts = test_df[imp_col].value_counts().reset_index()
+                    imp_counts.columns = ["Tingkat", "Jumlah"]
+                    fig_imp = px.bar(imp_counts, x="Tingkat", y="Jumlah", color="Tingkat", title="Distribusi Sampel Uji")
+                    fig_imp.update_layout(height=360, showlegend=False)
+                    st.plotly_chart(fig_imp, use_container_width=True)
+
+            # 2b. Benchmark Komparatif Disertasi & Studi Ablasi 3-Arah
+            hybrid_json = HYBRID_MODEL_DIR / "hybrid_test_metrics.json"
+            if hybrid_json.exists():
+                st.markdown("---")
+                st.markdown("### 🏛️ Komparasi Empiris & Studi Ablasi Bab 4 (Test Set Identik)")
+                st.caption("Perbandingan kuantitatif Single-Stream IndoBERTweet vs Dual-Stream Hybrid Fusion serta Model Manifest.")
+
+                try:
+                    with open(hybrid_json, "r", encoding="utf-8") as f:
+                        hyb_data = json.load(f)
+                    hyb_test = hyb_data.get("test_metrics", {})
+                    hyb_cm = hyb_test.get("confusion_matrix", {})
+                    hyb_mtl = hyb_data.get("multi_task_heads_test", {})
+                    mean_z = float(hyb_data.get("mean_gating_z", 0.0))
+                    type_acc = float(hyb_mtl.get("type", {}).get("accuracy", 0.0)) * 100
+                    emo_acc = float(hyb_mtl.get("emotion", {}).get("accuracy", 0.0)) * 100
+                    hyb_fp = int(hyb_cm.get("fp", 0))
+
+                    bench_records = [
+                        {
+                            "Arsitektur Model": "🔷 IndoBERTweet Baseline (Single-Stream)",
+                            "Akurasi": f"{metrics_data.get('accuracy', 0)*100:.2f}%",
+                            "Macro F1": f"{metrics_data.get('macro_f1', 0):.4f}",
+                            "ROC-AUC": f"{metrics_data.get('roc_auc', 0):.4f}" if metrics_data.get("roc_auc") is not None else "N/A",
+                            "PR-AUC": f"{metrics_data.get('pr_auc', 0):.4f}" if metrics_data.get("pr_auc") is not None else "N/A",
+                            "False Positives (FP)": f"{base_fp} sampel",
+                            "Multi-Task Output": "Hanya Binary Cyberbullying",
+                            "Gating Weight (z)": "1.000 (100% Leksikal)",
+                        },
+                        {
+                            "Arsitektur Model": "🛡️ Dual-Stream Hybrid Fusion (6-Head MTL)",
+                            "Akurasi": f"{hyb_test.get('accuracy', 0)*100:.2f}%",
+                            "Macro F1": f"{hyb_test.get('macro_f1', 0):.4f}",
+                            "ROC-AUC": f"{hyb_test.get('roc_auc', 0):.4f}" if hyb_test.get("roc_auc") is not None else "N/A",
+                            "PR-AUC": f"{hyb_test.get('pr_auc', 0):.4f}" if hyb_test.get("pr_auc") is not None else "N/A",
+                            "False Positives (FP)": f"{hyb_fp} sampel",
+                            "Multi-Task Output": f"6 Dimensi (Tipe: {type_acc:.1f}%, Emosi: {emo_acc:.1f}%)",
+                            "Gating Weight (z)": f"{mean_z:.4f} ({hyb_data.get('evaluation_mode', 'hybrid')})",
+                        },
+                    ]
+                    st.dataframe(pd.DataFrame(bench_records), use_container_width=True, hide_index=True)
+
+                    ablation_data = hyb_data.get("ablation_comparison")
+                    if not ablation_data and (HYBRID_MODEL_DIR / "ablation_comparison.json").exists():
+                        with open(HYBRID_MODEL_DIR / "ablation_comparison.json", "r", encoding="utf-8") as af:
+                            ablation_data = json.load(af)
+                    if ablation_data:
+                        ab_rows = []
+                        for k in ["model_a_indobertweet_only", "model_b_llm_only", "model_c_hybrid_fusion"]:
+                            m = ablation_data.get(k)
+                            if not m:
+                                continue
+                            ab_rows.append(
+                                {
+                                    "Varian Ablasi": m.get("model_name", k),
+                                    "Status": m.get("status", "evaluated"),
+                                    "Accuracy": f"{m['accuracy']*100:.2f}%" if m.get("accuracy") is not None else "N/A (Diblokir anti-leakage)",
+                                    "Macro-F1": f"{m['macro_f1']:.4f}" if m.get("macro_f1") is not None else "N/A",
+                                    "ROC-AUC": f"{m['roc_auc']:.4f}" if m.get("roc_auc") is not None else "N/A",
+                                    "PR-AUC": f"{m['pr_auc']:.4f}" if m.get("pr_auc") is not None else "N/A",
+                                }
+                            )
+                        st.markdown("#### 🧪 Tabel Studi Ablasi 3-Arah (`ablation_comparison.json`)")
+                        st.dataframe(pd.DataFrame(ab_rows), use_container_width=True, hide_index=True)
+
+                    hyb_manifest = load_model_manifest(HYBRID_MODEL_DIR)
+                    if hyb_manifest:
+                        with st.expander("📋 Model Manifest & Reproduksibilitas Hybrid Fusion"):
+                            st.json(hyb_manifest)
+                except Exception as e:
+                    st.caption(f"Info metrik hybrid: {e}")
+
+            # 2c. Evaluasi Empiris Dual Explainability (Real SHAP Library vs Diagnostik Leksikal CoT)
+            dual_xai_json = REPORT_DIR / "dual_xai_evaluation.json"
+            dual_xai_tex = REPORT_DIR / "table_dual_xai_breakdown.tex"
+
+            if dual_xai_json.exists():
+                st.markdown("---")
+                col_dx_t, col_dx_b = st.columns([3, 1])
+                with col_dx_t:
+                    st.markdown("### 🔬 Evaluasi Empiris Dual-XAI (SHAP Library ⟷ Diagnostik CoT LLM)")
+                    st.caption(
+                        "Mengukur kesetiaan kausal SHAP (Comprehensiveness) pada model target dan diagnostik tumpang tindih leksikal dengan CoT LLM."
+                    )
+                with col_dx_b:
+                    if st.button("🔄 Evaluasi Ulang Dual-XAI (30 Sampel)", use_container_width=True):
+                        with st.spinner("Menghitung atribusi SHAP & faithfulness pada test set..."):
+                            try:
+                                hyb_w = HYBRID_MODEL_DIR / "best_hybrid_model.pt"
+                                chosen_type = "hybrid" if hyb_w.exists() else "baseline"
+                                chosen_path = hyb_w if hyb_w.exists() else (MODEL_DIR / "best_model")
+                                evaluate_dual_xai_benchmark(
+                                    test_csv_path=FINAL_DIR / "test.csv",
+                                    model_path=chosen_path,
+                                    model_type=chosen_type,
+                                    output_dir=REPORT_DIR,
+                                    max_samples=30,
+                                )
+                                st.success("Evaluasi Dual-XAI berhasil diperbarui!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Gagal menjalankan Dual-XAI: {e}")
+
+                try:
+                    with open(dual_xai_json, "r", encoding="utf-8") as f:
+                        dx_data = json.load(f)
+
+                    faith = dx_data.get("scientific_faithfulness_metrics", {})
+                    diag = dx_data.get("diagnostic_lexical_heuristics", {})
+                    dx_impl = dx_data.get("implicitness_breakdown", {})
+
+                    dx1, dx2, dx3, dx4 = st.columns(4)
+                    with dx1:
+                        comp_m = faith.get("mean_comprehensiveness")
+                        st.metric("Faithfulness Comprehensiveness (Δp)", f"{comp_m:.4f}" if comp_m is not None else "N/A")
+                    with dx2:
+                        st.metric("Diagnostik Lexical Overlap", f"{diag.get('mean_lexical_alignment_score', 0):.2f}%")
+                    with dx3:
+                        st.metric("Konsistensi Leksikal (≥ 50%)", f"{diag.get('lexical_alignment_rate_percentage', 0):.2f}%")
+                    with dx4:
+                        st.metric("Model & Kondisi Vektor", f"{dx_data.get('model_type', 'hybrid')} | {dx_data.get('llm_vector_conditioning', 'n/a')}")
+
+                    impl_rows = []
+                    lvl_labels = {"E0": "E0 (Sangat Eksplisit)", "E1": "E1 (Semi-Tersirat)", "E2": "E2 (Tersirat)"}
+                    for lvl in ["E0", "E1", "E2"]:
+                        item = dx_impl.get(lvl, {})
+                        impl_rows.append(
+                            {
+                                "Tingkat": lvl_labels[lvl],
+                                "Comprehensiveness (Δp)": item.get("mean_comprehensiveness") or 0.0,
+                                "Diagnostik Lexical Overlap (%)": item.get("mean_diagnostic_lexical_alignment", 0.0),
+                                "Sampel": item.get("count", 0),
+                            }
+                        )
+                    fig_dx = px.bar(
+                        pd.DataFrame(impl_rows),
+                        x="Tingkat",
+                        y="Diagnostik Lexical Overlap (%)",
+                        color="Tingkat",
+                        text_auto=".1f",
+                        hover_data=["Comprehensiveness (Δp)", "Sampel"],
+                        color_discrete_sequence=["#3b82f6", "#8b5cf6", "#ec4899"],
+                        title="Diagnostik Lexical Overlap & Faithfulness per Tingkat Keterbukaan",
+                    )
+                    fig_dx.update_layout(height=340, showlegend=False)
+                    st.plotly_chart(fig_dx, use_container_width=True)
+
+                    global_imp = dx_data.get("global_feature_importance", {})
+                    top_tokens = global_imp.get("top_global_tokens", global_imp.get("top_tokens", []))[:15]
+                    if top_tokens:
+                        st.markdown("#### 🌐 Global SHAP Feature Importance (Top Token Leksikal)")
+                        fig_gi = px.bar(
+                            pd.DataFrame(top_tokens),
+                            x="mean_abs_shap",
+                            y="token",
+                            orientation="h",
+                            hover_data=["occurrences"] if "occurrences" in top_tokens[0] else None,
+                            title="Top Token berdasarkan Mean |SHAP Value|",
+                        )
+                        fig_gi.update_layout(height=360, yaxis={"categoryorder": "total ascending"})
+                        st.plotly_chart(fig_gi, use_container_width=True)
+
+                    st.info(
+                        "ℹ️ **Catatan Metodologis Explainability**: *Comprehensiveness (Δp)* mengukur kesetiaan kausal SHAP "
+                        "(penurunan probabilitas prediksi ketika token ber-SHAP tertinggi dihilangkan), sedangkan *Lexical Overlap* "
+                        "merupakan metrik diagnostik heuristik dan tidak diklaim sebagai bukti validitas kausal penuh."
+                    )
+                except Exception as e:
+                    st.caption(f"Info visualisasi Dual-XAI: {e}")
+
+            # 3. LaTeX Tables Generator
+            st.markdown("---")
+            st.markdown("### 📝 Kode LaTeX Bab 4 (Hasil & Pembahasan)")
+            st.caption("Salin kode LaTeX berikut langsung ke dalam dokumen Overleaf/naskah disertasi Anda:")
+
+            tab_tex1, tab_tex2 = st.tabs(["📄 Tabel Metrik Klasifikasi", "🔬 Tabel Konsistensi Dual-XAI"])
+            with tab_tex1:
+                if tex_report.exists():
+                    with open(tex_report, "r", encoding="utf-8") as f:
+                        st.code(f.read(), language="latex")
+                else:
+                    st.info("Kode LaTeX klasifikasi sedang dipersiapkan...")
+
+            with tab_tex2:
+                if dual_xai_tex.exists():
+                    with open(dual_xai_tex, "r", encoding="utf-8") as f:
+                        st.code(f.read(), language="latex")
+                else:
+                    st.info("Kode LaTeX Dual-XAI sedang dipersiapkan...")
 
     # =========================================================================
     # TAB 3: PLAYGROUND INFERENSI LIVE (HYBRID & SINGLE TRANSFORMER)
@@ -572,213 +634,258 @@ def render_model_training_page():
         best_single_path = MODEL_DIR / "best_model"
         best_hybrid_path = HYBRID_MODEL_DIR / "best_hybrid_model.pt"
 
-        single_ready = best_single_path.exists()
+        single_ready = best_single_path.exists() and (
+            (best_single_path / "model.safetensors").exists() or (best_single_path / "pytorch_model.bin").exists()
+        )
         hybrid_ready = best_hybrid_path.exists()
 
         if not single_ready and not hybrid_ready:
             st.warning("⚠️ Model belum selesai dilatih. Silakan latih model pada Tab 1 terlebih dahulu.")
             st.text_input("Contoh Komentar:", value="makannya segentong buset mirip ursula")
             st.button("Prediksi", disabled=True)
-            return
-
-        # Pilihan Model Inferensi
-        model_play_choice = st.radio(
-            "Pilih Model untuk Inferensi:",
-            [
-                "🛡️ Dual-Stream Hybrid Fusion Model (Transformer + SumoPod LLM - 6 Multi-Task Heads)",
-                "🔷 Single-Stream IndoBERTweet Baseline"
-            ],
-            index=0 if hybrid_ready else 1,
-            horizontal=True
-        )
-
-        # Status Backend LLM untuk Dual-Stream
-        if "Dual-Stream" in model_play_choice:
-            active_eng = st.session_state.get("active_engine")
-            is_mock_eng = getattr(active_eng, "is_mock", True) if active_eng else True
-            if is_mock_eng:
-                st.caption("ℹ️ **Backend LLM Stream: Mode Simulasi (Mock Fallback)**. Menggunakan deteksi heuristik simulasi. Untuk penalaran kultural mendalam via SumoPod LLM, hubungkan API SumoPod di tab *Pengaturan & Model*.")
-            else:
-                st.caption(f"🌐 **Backend LLM Stream: SumoPod AI Gateway** (`{getattr(active_eng, 'model_name', DEFAULT_SUMOPOD_MODEL)}` aktif).")
-
-        # Muat threshold optimal dari hasil evaluasi
-        opt_th_default = 0.50
-        if json_report.exists():
-            try:
-                with open(json_report, "r", encoding="utf-8") as f:
-                    opt_th_default = float(json.load(f).get("optimal_threshold", 0.50))
-            except Exception:
-                opt_th_default = 0.50
-
-        c_inp1, c_inp2 = st.columns([3, 1])
-        with c_inp1:
-            test_input = st.text_input(
-                "Masukkan komentar media sosial untuk diuji:",
-                value="makannya segentong buset mirip ursula di little mermaid",
-                placeholder="Ketik komentar di sini..."
-            )
-        with c_inp2:
-            th_choice = st.slider(
-                "Ambang Batas (Threshold):",
-                min_value=0.20,
-                max_value=0.80,
-                value=opt_th_default,
-                step=0.02,
-                help=f"Ambang batas probabilitas untuk vonis Cyberbullying. Nilai optimal hasil evaluasi: {opt_th_default:.2f}"
+        else:
+            # Pilihan Model Inferensi
+            model_play_choice = st.radio(
+                "Pilih Model untuk Inferensi:",
+                [
+                    "🛡️ Dual-Stream Hybrid Fusion Model (Transformer + SumoPod LLM - 6 Multi-Task Heads)",
+                    "🔷 Single-Stream IndoBERTweet Baseline",
+                ],
+                index=0 if hybrid_ready else 1,
+                horizontal=True,
             )
 
-        btn_pred_text = "🔍 Jalankan Inferensi Hybrid Multi-Task" if "Dual-Stream" in model_play_choice else "🔍 Klasifikasikan dengan IndoBERTweet Baseline"
-        
-        if st.button(btn_pred_text, type="primary"):
-            if not test_input.strip():
-                st.warning("Silakan masukkan teks terlebih dahulu.")
+            # Status Backend LLM & muat threshold optimal dari Model Manifest
+            if "Dual-Stream" in model_play_choice:
+                active_eng = st.session_state.get("active_engine")
+                is_mock_eng = getattr(active_eng, "is_mock", True) if active_eng else True
+                if is_mock_eng:
+                    st.warning("ℹ️ **Backend LLM Stream: Mode Simulasi (Mock Fallback)**. Hasil Stream B berasal dari heuristik simulasi, bukan API SumoPod LLM.")
+                else:
+                    st.caption(f"🌐 **Backend LLM Stream: SumoPod AI Gateway** (`{getattr(active_eng, 'model_name', DEFAULT_SUMOPOD_MODEL)}` aktif).")
+
+                hyb_manifest = load_model_manifest(HYBRID_MODEL_DIR)
+                if hyb_manifest and hyb_manifest.get("optimal_threshold") is not None:
+                    opt_th_default = float(hyb_manifest["optimal_threshold"])
+                elif (HYBRID_MODEL_DIR / "hybrid_test_metrics.json").exists():
+                    try:
+                        with open(HYBRID_MODEL_DIR / "hybrid_test_metrics.json", "r", encoding="utf-8") as hf:
+                            opt_th_default = float(json.load(hf).get("optimal_threshold", 0.50))
+                    except Exception:
+                        opt_th_default = 0.50
+                else:
+                    opt_th_default = 0.50
             else:
-                if "Dual-Stream" in model_play_choice:
+                opt_th_default = get_saved_threshold(best_single_path, default=0.50)
+
+            c_inp1, c_inp2 = st.columns([3, 1])
+            with c_inp1:
+                test_input = st.text_input(
+                    "Masukkan komentar media sosial untuk diuji:",
+                    value="makannya segentong buset mirip ursula di little mermaid",
+                    placeholder="Ketik komentar di sini...",
+                )
+            with c_inp2:
+                th_choice = st.slider(
+                    "Ambang Batas (Threshold):",
+                    min_value=0.20,
+                    max_value=0.80,
+                    value=float(min(0.80, max(0.20, opt_th_default))),
+                    step=0.02,
+                    help=f"Threshold optimal Validation Set dari model_manifest.json: {opt_th_default:.2f}",
+                )
+
+            btn_pred_text = (
+                "🔍 Jalankan Inferensi Hybrid Multi-Task"
+                if "Dual-Stream" in model_play_choice
+                else "🔍 Klasifikasikan dengan IndoBERTweet Baseline"
+            )
+
+            if st.button(btn_pred_text, type="primary"):
+                if not test_input.strip():
+                    st.warning("Silakan masukkan teks terlebih dahulu.")
+                elif "Dual-Stream" in model_play_choice:
                     if not hybrid_ready:
                         st.error("Model Hybrid Fusion belum dilatih. Silakan pilih 'Dual-Stream Hybrid Fusion' di Tab 1 dan jalankan pelatihan.")
-                        return
+                    else:
+                        with st.spinner("Menjalankan inferensi Dual-Stream Hybrid Fusion & Dual-Modality SHAP..."):
+                            try:
+                                engine = st.session_state.get("active_engine")
+                                temp = st.session_state.get("temperature", 0.1)
+                                max_tok = st.session_state.get("max_tokens", 160)
+                                sys_prompt = st.session_state.get("custom_system_prompt", None)
 
-                    with st.spinner("Menjalankan inferensi Dual-Stream Hybrid Fusion..."):
-                        try:
-                            # 1. Ekstraksi Anotasi LLM
-                            engine = st.session_state.get("active_engine")
-                            temp = st.session_state.get("temperature", 0.1)
-                            max_tok = st.session_state.get("max_tokens", 160)
-                            sys_prompt = st.session_state.get("custom_system_prompt", None)
+                                llm_anno = run_single_annotation(
+                                    engine=engine,
+                                    text=test_input.strip(),
+                                    system_prompt=sys_prompt,
+                                    max_new_tokens=max_tok,
+                                    temperature=temp,
+                                )
 
-                            llm_anno = run_single_annotation(
-                                engine=engine,
-                                text=test_input.strip(),
-                                system_prompt=sys_prompt,
-                                max_new_tokens=max_tok,
-                                temperature=temp
-                            )
+                                hyb_model, hyb_tok, hyb_dev, hyb_manifest = load_hybrid_classifier_with_manifest(best_hybrid_path)
+                                h_res = predict_hybrid_text(
+                                    model=hyb_model,
+                                    tokenizer=hyb_tok,
+                                    device=hyb_dev,
+                                    text=test_input.strip(),
+                                    annotation_dict=llm_anno,
+                                    threshold=th_choice,
+                                    manifest=hyb_manifest,
+                                )
 
-                            # 2. Inferensi Hybrid
-                            hyb_model, hyb_tok, hyb_dev = load_hybrid_classifier(best_hybrid_path)
-                            h_res = predict_hybrid_text(
-                                model=hyb_model,
-                                tokenizer=hyb_tok,
-                                device=hyb_dev,
-                                text=test_input.strip(),
-                                annotation_dict=llm_anno,
-                                threshold=th_choice
-                            )
+                                is_cb = h_res["cyberbullying"] == "YES"
+                                badge_color = "#e53e3e" if is_cb else "#38a169"
+                                verdict_title = "🚨 TERDETEKSI CYBERBULLYING (HYBRID FUSION)" if is_cb else "✅ NON-CYBERBULLYING (NETRAL)"
+                                safe_text_html = sanitize_html_text(h_res["text"])
 
-                            is_cb = h_res["cyberbullying"] == "YES"
-                            badge_color = "#e53e3e" if is_cb else "#38a169"
-                            verdict_title = "🚨 TERDETEKSI CYBERBULLYING (HYBRID FUSION)" if is_cb else "✅ NON-CYBERBULLYING (NETRAL)"
-
-                            st.markdown(
-                                f"""
-                                <div style="background-color: {'#fff5f5' if is_cb else '#f0fff4'}; border: 2px solid {badge_color}; border-radius: 12px; padding: 20px; margin: 15px 0;">
-                                    <h3 style="color: {badge_color}; margin: 0 0 8px 0;">{verdict_title}</h3>
-                                    <p style="font-size: 16px; margin: 0; color: #2d3748;"><strong>Teks:</strong> "{h_res['text']}"</p>
-                                </div>
-                                """,
-                                unsafe_allow_html=True
-                            )
-
-                            # Metrik Kartu Utama
-                            c1, c2, c3, c4 = st.columns(4)
-                            with c1:
-                                st.metric("Probabilitas Cyberbullying", f"{h_res['prob_cyberbullying']*100:.2f}%")
-                            with c2:
-                                z_val = h_res["gate_weight_z"]
-                                st.metric("Bobot Gerbang Fusi (z)", f"{z_val:.3f}", help=f"{z_val*100:.1f}% Atensi Leksikal IndoBERTweet, {(1-z_val)*100:.1f}% Penalaran LLM")
-                            with c3:
-                                st.metric("Threshold Digunakan", f"{th_choice:.2f}")
-                            with c4:
-                                st.metric("Latency", f"{h_res['latency_ms']} ms")
-
-                            # 6 Multi-Task Classification Heads Cards
-                            st.markdown("#### 🎯 Hasil Prediksi 6-Head Multi-Task Taksonomi Disertasi")
-                            m1, m2, m3, m4, m5 = st.columns(5)
-                            with m1:
-                                st.metric("Tipe (Type)", h_res["type"])
-                            with m2:
-                                st.metric("Emosi (Emotion)", h_res["emotion"])
-                            with m3:
-                                st.metric("Konteks Budaya", h_res["cultural_context"])
-                            with m4:
-                                st.metric("Keterbukaan", h_res["implicit_level"])
-                            with m5:
-                                st.metric("Tingkat Keparahan", h_res["severity"])
-
-                            # Dual Explainability Inspector
-                            st.markdown("---")
-                            st.markdown("#### 🔬 Dual Explainability Inspector")
-                            col_sh, col_cot = st.columns(2)
-
-                            with col_sh:
-                                st.markdown("##### 📊 Atribusi Fitur Token (SHAP)")
-                                explainer = HybridSHAPExplainer()
-                                shap_res = explainer.explain_text(test_input.strip())
-                                st.markdown(shap_res["html_heatmap"], unsafe_allow_html=True)
-                                pos_t = [f"`{t['token']}`" for t in shap_res.get("top_positive_tokens", [])]
-                                if pos_t:
-                                    st.markdown(f"🔴 **Kata Pemicu**: {', '.join(pos_t)}")
-
-                            with col_cot:
-                                st.markdown("##### 💬 Chain-of-Thought Rationale (SumoPod LLM)")
                                 st.markdown(
                                     f"""
-                                    <div style="background-color: #f8fafc; border-left: 4px solid #3b82f6; padding: 14px 18px; border-radius: 6px; min-height: 110px;">
-                                        <p style="font-size: 15px; line-height: 1.6; color: #1e293b; margin: 0;">
-                                            {llm_anno.get('explanation', '')}
+                                    <div style="background-color: {'#fff5f5' if is_cb else '#f0fff4'}; border: 2px solid {badge_color}; border-radius: 12px; padding: 20px; margin: 15px 0;">
+                                        <h3 style="color: {badge_color}; margin: 0 0 8px 0;">{verdict_title}</h3>
+                                        <p style="font-size: 16px; margin: 0; color: #2d3748;"><strong>Teks:</strong> "{safe_text_html}"</p>
+                                    </div>
+                                    """,
+                                    unsafe_allow_html=True,
+                                )
+
+                                c1, c2, c3, c4 = st.columns(4)
+                                with c1:
+                                    st.metric("Probabilitas Cyberbullying", f"{h_res['prob_cyberbullying']*100:.2f}%")
+                                with c2:
+                                    z_val = h_res["gate_weight_z"]
+                                    st.metric(
+                                        "Bobot Gerbang Fusi (z)",
+                                        f"{z_val:.3f}",
+                                        help=f"{z_val*100:.1f}% Atensi Leksikal IndoBERTweet, {(1-z_val)*100:.1f}% Penalaran LLM",
+                                    )
+                                with c3:
+                                    st.metric("Threshold Digunakan", f"{h_res.get('threshold', th_choice):.2f}")
+                                with c4:
+                                    st.metric("Latency", f"{h_res['latency_ms']} ms")
+
+                                st.markdown("#### 🎯 Hasil Prediksi 6-Head Multi-Task Taksonomi Disertasi")
+                                m1, m2, m3, m4, m5 = st.columns(5)
+                                with m1:
+                                    st.metric("Tipe (Type)", h_res["type"])
+                                with m2:
+                                    st.metric("Emosi (Emotion)", h_res["emotion"])
+                                with m3:
+                                    st.metric("Konteks Budaya", h_res["cultural_context"])
+                                with m4:
+                                    st.metric("Keterbukaan", h_res["implicit_level"])
+                                with m5:
+                                    st.metric("Tingkat Keparahan", h_res["severity"])
+
+                                st.markdown("---")
+                                st.markdown("#### 🔬 Dual-Modality Explainability Inspector (Real `shap` Library)")
+                                explainer = HybridSHAPExplainer(
+                                    model_type="hybrid",
+                                    loaded_model=hyb_model,
+                                    loaded_tokenizer=hyb_tok,
+                                    device=hyb_dev,
+                                    manifest=hyb_manifest,
+                                )
+                                dual_shap = explainer.explain_dual_modalities(
+                                    text=test_input.strip(),
+                                    annotation_dict=llm_anno,
+                                    max_evals_text=90,
+                                    max_evals_vec=120,
+                                )
+                                shap_res = dual_shap["textual_shap"]
+                                vec_shap = dual_shap["llm_vector_shap"]
+                                llm_vec_used = extract_teacher_annotation_features(llm_anno) if llm_anno else None
+                                comp_score = compute_faithfulness_comprehensiveness(
+                                    explainer, test_input.strip(), shap_res, llm_vector=llm_vec_used
+                                )
+
+                                col_sh, col_cot = st.columns(2)
+                                with col_sh:
+                                    st.markdown("##### 📊 Stream A: Atribusi Token Leksikal (SHAP)")
+                                    st.markdown(shap_res["html_heatmap"], unsafe_allow_html=True)
+                                    pos_t = [f"`{t['token']}` (+{t['shap_value']:.3f})" for t in shap_res.get("top_positive_tokens", [])]
+                                    neg_t = [f"`{t['token']}` ({t['shap_value']:.3f})" for t in shap_res.get("top_negative_tokens", [])]
+                                    if pos_t:
+                                        st.markdown(f"🔴 **Kontribusi Positif (+)**: {', '.join(pos_t)}")
+                                    if neg_t:
+                                        st.markdown(f"🔵 **Kontribusi Negatif (-)**: {', '.join(neg_t)}")
+                                    if comp_score is not None:
+                                        st.caption(f"🎯 Faithfulness Comprehensiveness (Δp setelah ablasi top token): **{comp_score:.4f}**")
+
+                                with col_cot:
+                                    st.markdown("##### 💬 Stream B & CoT Rationale (SumoPod LLM)")
+                                    safe_expl_html = sanitize_html_text(llm_anno.get("explanation", ""))
+                                    st.markdown(
+                                        f"""
+                                        <div style="background-color: #f8fafc; border-left: 4px solid #3b82f6; padding: 14px 18px; border-radius: 6px; min-height: 110px;">
+                                            <p style="font-size: 15px; line-height: 1.6; color: #1e293b; margin: 0;">
+                                                {safe_expl_html}
+                                            </p>
+                                        </div>
+                                        """,
+                                        unsafe_allow_html=True,
+                                    )
+                                    top_feats = (vec_shap.get("top_positive_features", []) + vec_shap.get("top_negative_features", []))[:8]
+                                    if top_feats:
+                                        st.markdown("**Kontribusi Fitur Pengetahuan LLM 33D (SHAP Numerik Terpisah):**")
+                                        st.dataframe(pd.DataFrame(top_feats), use_container_width=True, hide_index=True)
+
+                                align_info = align_shap_with_cot(shap_res, llm_anno.get("explanation", ""), comprehensiveness_score=comp_score)
+                                score = align_info["alignment_score"]
+                                safe_align_sum = sanitize_html_text(align_info["alignment_summary"])
+                                safe_disc = sanitize_html_text(
+                                    "Metrik lexical overlap bersifat diagnostik heuristik, bukan ukuran validitas kausal tervalidasi."
+                                )
+                                st.markdown(
+                                    f"""
+                                    <div style="margin-top: 14px; background-color: #f0fdf4; border: 1px solid #22c55e; border-radius: 8px; padding: 12px 18px;">
+                                        <span style="font-weight: 600; color: #15803d;">🛡️ Diagnostik Tumpang Tindih Leksikal Dual-XAI: {score}%</span>
+                                        <p style="margin: 4px 0 0 0; font-size: 13px; color: #15803d;">
+                                            {safe_align_sum}
+                                        </p>
+                                        <p style="margin: 4px 0 0 0; font-size: 12px; color: #475569;">
+                                            <em>Catatan: {safe_disc}</em>
                                         </p>
                                     </div>
                                     """,
-                                    unsafe_allow_html=True
+                                    unsafe_allow_html=True,
                                 )
 
-                            # Alignment Metric
-                            align_info = align_shap_with_cot(shap_res, llm_anno.get("explanation", ""))
-                            score = align_info["alignment_score"]
-                            st.markdown(
-                                f"""
-                                <div style="margin-top: 14px; background-color: #f0fdf4; border: 1px solid #22c55e; border-radius: 8px; padding: 12px 18px;">
-                                    <span style="font-weight: 600; color: #15803d;">🛡️ Indeks Keselarasan Dual-XAI: {score}%</span>
-                                    <p style="margin: 4px 0 0 0; font-size: 13px; color: #15803d;">
-                                        {align_info['alignment_summary']}
-                                    </p>
-                                </div>
-                                """,
-                                unsafe_allow_html=True
-                            )
-
-                        except Exception as e:
-                            st.error(f"Gagal inferensi Hybrid Fusion: {str(e)}")
-
+                            except Exception as e:
+                                st.error(f"Gagal inferensi Hybrid Fusion: {str(e)}")
                 else:
-                    with st.spinner("Melakukan inferensi Transformer Baseline..."):
-                        try:
-                            model, tokenizer, dev = load_classifier(best_single_path)
-                            res = predict_text(model, tokenizer, dev, test_input, threshold=th_choice)
+                    if not single_ready:
+                        st.error("Model IndoBERTweet Baseline belum ditemukan. Silakan latih model baseline di Tab 1.")
+                    else:
+                        with st.spinner("Melakukan inferensi Transformer Baseline..."):
+                            try:
+                                model, tokenizer, dev = load_classifier(best_single_path)
+                                res = predict_text(model, tokenizer, dev, test_input, threshold=th_choice)
 
-                            is_cb = res["label"] == 1
-                            badge_color = "#e53e3e" if is_cb else "#38a169"
-                            verdict_title = "🚨 TERDETEKSI CYBERBULLYING" if is_cb else "✅ NON-CYBERBULLYING (NETRAL)"
+                                is_cb = res["label"] == 1
+                                badge_color = "#e53e3e" if is_cb else "#38a169"
+                                verdict_title = "🚨 TERDETEKSI CYBERBULLYING" if is_cb else "✅ NON-CYBERBULLYING (NETRAL)"
+                                safe_base_html = sanitize_html_text(res["text"])
 
-                            st.markdown(
-                                f"""
-                                <div style="background-color: {'#fff5f5' if is_cb else '#f0fff4'}; border: 2px solid {badge_color}; border-radius: 12px; padding: 20px; margin: 15px 0;">
-                                    <h3 style="color: {badge_color}; margin: 0 0 8px 0;">{verdict_title}</h3>
-                                    <p style="font-size: 16px; margin: 0; color: #2d3748;"><strong>Teks:</strong> "{res['text']}"</p>
-                                </div>
-                                """,
-                                unsafe_allow_html=True
-                            )
+                                st.markdown(
+                                    f"""
+                                    <div style="background-color: {'#fff5f5' if is_cb else '#f0fff4'}; border: 2px solid {badge_color}; border-radius: 12px; padding: 20px; margin: 15px 0;">
+                                        <h3 style="color: {badge_color}; margin: 0 0 8px 0;">{verdict_title}</h3>
+                                        <p style="font-size: 16px; margin: 0; color: #2d3748;"><strong>Teks:</strong> "{safe_base_html}"</p>
+                                    </div>
+                                    """,
+                                    unsafe_allow_html=True,
+                                )
 
-                            col_res1, col_res2, col_res3, col_res4 = st.columns(4)
-                            with col_res1:
-                                st.metric("Tingkat Keyakinan (Confidence)", f"{res['confidence']*100:.2f}%")
-                            with col_res2:
-                                st.metric("Probabilitas Cyberbullying", f"{res['prob_cb']*100:.2f}%")
-                            with col_res3:
-                                st.metric("Threshold Digunakan", f"{res.get('threshold', th_choice):.2f}")
-                            with col_res4:
-                                st.metric("Kecepatan Inferensi", f"{res['latency_ms']} ms")
+                                col_res1, col_res2, col_res3, col_res4 = st.columns(4)
+                                with col_res1:
+                                    st.metric("Tingkat Keyakinan (Confidence)", f"{res['confidence']*100:.2f}%")
+                                with col_res2:
+                                    st.metric("Probabilitas Cyberbullying", f"{res['prob_cb']*100:.2f}%")
+                                with col_res3:
+                                    st.metric("Threshold Digunakan", f"{res.get('threshold', th_choice):.2f}")
+                                with col_res4:
+                                    st.metric("Kecepatan Inferensi", f"{res['latency_ms']} ms")
 
-                        except Exception as e:
-                            st.error(f"Gagal memuat model: {str(e)}")
+                            except Exception as e:
+                                st.error(f"Gagal memuat model: {str(e)}")

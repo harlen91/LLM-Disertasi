@@ -1,38 +1,132 @@
 {
-  "accuracy": 0.78,
-  "macro_precision": 0.7815,
-  "macro_recall": 0.7748,
-  "macro_f1": 0.7764,
-  "weighted_precision": 0.7808,
-  "weighted_recall": 0.78,
-  "weighted_f1": 0.7787,
-  "roc_auc": 0.8576,
-  "log_loss": 0.4745,
-  "confusion_matrix": [
+  "threshold": 0.76,
+  "support": 5,
+  "accuracy": 0.2,
+  "macro_precision": 0.1,
+  "macro_recall": 0.5,
+  "macro_f1": 0.1667,
+  "weighted_precision": 0.04,
+  "weighted_recall": 0.2,
+  "weighted_f1": 0.0667,
+  "roc_auc": 0.0,
+  "pr_auc": 0.6792,
+  "calibration": {
+    "ece": 0.0559,
+    "mce": 0.0559,
+    "brier_score": 0.1689,
+    "log_loss": 0.5243
+  },
+  "confidence_intervals_95": {
+    "accuracy": [
+      0.0,
+      0.6
+    ],
+    "macro_f1": [
+      0.0,
+      0.375
+    ],
+    "roc_auc": [
+      0.0,
+      0.0
+    ],
+    "pr_auc": [
+      0.325,
+      0.7625
+    ]
+  },
+  "confusion_matrix": {
+    "tn": 1,
+    "fp": 0,
+    "fn": 4,
+    "tp": 0
+  },
+  "confusion_matrix_2x2": [
     [
-      68,
-      13
+      1,
+      0
     ],
     [
-      20,
-      49
+      4,
+      0
     ]
   ],
   "per_class": {
     "non_cyberbullying": {
-      "precision": 0.7727,
-      "recall": 0.8395,
-      "f1": 0.8047,
-      "support": 81
+      "precision": 0.2,
+      "recall": 1.0,
+      "f1": 0.3333,
+      "support": 1
     },
     "cyberbullying": {
-      "precision": 0.7903,
-      "recall": 0.7101,
-      "f1": 0.7481,
-      "support": 69
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "support": 4
     }
   },
-  "optimal_threshold": 0.48,
-  "baseline_accuracy": 0.7667,
-  "baseline_macro_f1": 0.762
+  "implicitness_breakdown": {
+    "E0": {
+      "count": 4,
+      "correct": 1,
+      "accuracy": 0.25,
+      "macro_f1": 0.2
+    },
+    "E1": {
+      "count": 1,
+      "correct": 0,
+      "accuracy": 0.0,
+      "macro_f1": 0.0
+    }
+  },
+  "type_breakdown": {
+    "BSH": {
+      "count": 2,
+      "correct": 0,
+      "accuracy": 0.0
+    },
+    "INS": {
+      "count": 2,
+      "correct": 0,
+      "accuracy": 0.0
+    },
+    "NONE": {
+      "count": 1,
+      "correct": 1,
+      "accuracy": 1.0
+    }
+  },
+  "error_analysis": {
+    "false_positive_count": 0,
+    "false_negative_count": 4,
+    "false_positive_rate": 0.0,
+    "false_negative_rate": 1.0,
+    "fp_samples": [],
+    "fn_samples": [
+      {
+        "text": "Songong banget muka nya",
+        "prob": 0.7386,
+        "implicit_level": "E0",
+        "type": "INS"
+      },
+      {
+        "text": "Akulah si princes gendut",
+        "prob": 0.7389,
+        "implicit_level": "E0",
+        "type": "BSH"
+      },
+      {
+        "text": "Bongsor ke ??",
+        "prob": 0.7497,
+        "implicit_level": "E1",
+        "type": "BSH"
+      },
+      {
+        "text": "orang NORAK tuh.. dr awal gw ga pernah follow nih org",
+        "prob": 0.7351,
+        "implicit_level": "E0",
+        "type": "INS"
+      }
+    ]
+  },
+  "target_source": "pseudo_labeled_llm"
 }

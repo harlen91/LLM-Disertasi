@@ -1,21 +1,409 @@
 {
-  "model_architecture": "Hybrid Dual-Stream (IndoBERTweet + SumoPod LLaMA-3 33D)",
-  "pretrained_backbone": "indolem/indobertweet-base-uncased",
+  "model_architecture": "Hybrid Dual-Stream Gated Fusion (IndoBERTweet + SumoPod LLM 33D Teacher Features)",
+  "pretrained_backbone": "indobenchmark/indobert-base-p1",
+  "dataset_version": "iicd-curated-cfa1f94321d2",
+  "target_source": "pseudo_labeled_llm",
+  "evaluation_mode": "leakage_free_modality_masked_student",
   "best_epoch": 1,
-  "epochs_trained": 4,
-  "optimal_threshold": 0.3,
+  "epochs_trained": 3,
+  "training_duration_sec": 9.9,
+  "optimal_threshold": 0.2,
+  "threshold_selection_split": "validation",
+  "mean_gating_z": 0.4985,
   "test_metrics": {
-    "accuracy": 1.0,
-    "macro_f1": 1.0,
-    "roc_auc": 1.0,
-    "type_accuracy": 0.9467,
-    "emotion_accuracy": 0.9733,
-    "mean_gating_z": 0.4668,
+    "threshold": 0.2,
+    "support": 5,
+    "accuracy": 0.8,
+    "macro_precision": 0.4,
+    "macro_recall": 0.5,
+    "macro_f1": 0.4444,
+    "weighted_precision": 0.64,
+    "weighted_recall": 0.8,
+    "weighted_f1": 0.7111,
+    "roc_auc": 0.75,
+    "pr_auc": 0.95,
+    "calibration": {
+      "ece": 0.1589,
+      "mce": 0.3201,
+      "brier_score": 0.1587,
+      "log_loss": 0.4943
+    },
+    "confidence_intervals_95": {
+      "accuracy": [
+        0.4,
+        1.0
+      ],
+      "macro_f1": [
+        0.2857,
+        1.0
+      ],
+      "roc_auc": [
+        0.25,
+        1.0
+      ],
+      "pr_auc": [
+        0.7,
+        1.0
+      ]
+    },
     "confusion_matrix": {
-      "tn": 81,
-      "fp": 0,
+      "tn": 0,
+      "fp": 1,
       "fn": 0,
-      "tp": 69
+      "tp": 4
+    },
+    "confusion_matrix_2x2": [
+      [
+        0,
+        1
+      ],
+      [
+        0,
+        4
+      ]
+    ],
+    "per_class": {
+      "non_cyberbullying": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "support": 1
+      },
+      "cyberbullying": {
+        "precision": 0.8,
+        "recall": 1.0,
+        "f1": 0.8889,
+        "support": 4
+      }
+    },
+    "implicitness_breakdown": {
+      "E0": {
+        "count": 4,
+        "correct": 3,
+        "accuracy": 0.75,
+        "macro_f1": 0.4286
+      },
+      "E1": {
+        "count": 1,
+        "correct": 1,
+        "accuracy": 1.0,
+        "macro_f1": 1.0
+      }
+    },
+    "type_breakdown": {
+      "BSH": {
+        "count": 2,
+        "correct": 2,
+        "accuracy": 1.0
+      },
+      "INS": {
+        "count": 2,
+        "correct": 2,
+        "accuracy": 1.0
+      },
+      "NONE": {
+        "count": 1,
+        "correct": 0,
+        "accuracy": 0.0
+      }
+    },
+    "error_analysis": {
+      "false_positive_count": 1,
+      "false_negative_count": 0,
+      "false_positive_rate": 1.0,
+      "false_negative_rate": 0.0,
+      "fp_samples": [
+        {
+          "text": "Anjirr ??",
+          "prob": 0.7381,
+          "implicit_level": "E0"
+        }
+      ],
+      "fn_samples": []
+    }
+  },
+  "multi_task_heads_test": {
+    "type": {
+      "support": 5,
+      "accuracy": 0.4,
+      "macro_f1": 0.1905
+    },
+    "emotion": {
+      "support": 5,
+      "accuracy": 0.4,
+      "macro_f1": 0.1905
+    },
+    "cultural": {
+      "support": 5,
+      "accuracy": 0.4,
+      "macro_f1": 0.2857
+    },
+    "implicit": {
+      "support": 5,
+      "accuracy": 0.8,
+      "macro_f1": 0.4444
+    },
+    "severity": {
+      "support": 5,
+      "accuracy": 1.0,
+      "macro_f1": 1.0
+    }
+  },
+  "ablation_comparison": {
+    "test_samples": 5,
+    "target_source": "pseudo_labeled_llm",
+    "evaluation_mode": "modality_masked_student",
+    "model_a_indobertweet_only": {
+      "threshold": 0.76,
+      "support": 5,
+      "accuracy": 0.2,
+      "macro_precision": 0.1,
+      "macro_recall": 0.5,
+      "macro_f1": 0.1667,
+      "weighted_precision": 0.04,
+      "weighted_recall": 0.2,
+      "weighted_f1": 0.0667,
+      "roc_auc": 0.0,
+      "pr_auc": 0.6792,
+      "calibration": {
+        "ece": 0.0559,
+        "mce": 0.0559,
+        "brier_score": 0.1689,
+        "log_loss": 0.5243
+      },
+      "confidence_intervals_95": {
+        "accuracy": [
+          0.0,
+          0.6
+        ],
+        "macro_f1": [
+          0.0,
+          0.375
+        ],
+        "roc_auc": [
+          0.0,
+          0.0
+        ],
+        "pr_auc": [
+          0.325,
+          0.7625
+        ]
+      },
+      "confusion_matrix": {
+        "tn": 1,
+        "fp": 0,
+        "fn": 4,
+        "tp": 0
+      },
+      "confusion_matrix_2x2": [
+        [
+          1,
+          0
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "per_class": {
+        "non_cyberbullying": {
+          "precision": 0.2,
+          "recall": 1.0,
+          "f1": 0.3333,
+          "support": 1
+        },
+        "cyberbullying": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 4
+        }
+      },
+      "implicitness_breakdown": {
+        "E0": {
+          "count": 4,
+          "correct": 1,
+          "accuracy": 0.25,
+          "macro_f1": 0.2
+        },
+        "E1": {
+          "count": 1,
+          "correct": 0,
+          "accuracy": 0.0,
+          "macro_f1": 0.0
+        }
+      },
+      "type_breakdown": {
+        "BSH": {
+          "count": 2,
+          "correct": 0,
+          "accuracy": 0.0
+        },
+        "INS": {
+          "count": 2,
+          "correct": 0,
+          "accuracy": 0.0
+        },
+        "NONE": {
+          "count": 1,
+          "correct": 1,
+          "accuracy": 1.0
+        }
+      },
+      "error_analysis": {
+        "false_positive_count": 0,
+        "false_negative_count": 4,
+        "false_positive_rate": 0.0,
+        "false_negative_rate": 1.0,
+        "fp_samples": [],
+        "fn_samples": [
+          {
+            "text": "Songong banget muka nya",
+            "prob": 0.7386,
+            "implicit_level": "E0",
+            "type": "INS"
+          },
+          {
+            "text": "Akulah si princes gendut",
+            "prob": 0.7389,
+            "implicit_level": "E0",
+            "type": "BSH"
+          },
+          {
+            "text": "Bongsor ke ??",
+            "prob": 0.7497,
+            "implicit_level": "E1",
+            "type": "BSH"
+          },
+          {
+            "text": "orang NORAK tuh.. dr awal gw ga pernah follow nih org",
+            "prob": 0.7351,
+            "implicit_level": "E0",
+            "type": "INS"
+          }
+        ]
+      },
+      "model_name": "A. IndoBERTweet-Only (Stream A)"
+    },
+    "model_b_llm_only": {
+      "model_name": "B. LLM Representation-Only (Stream B)",
+      "status": "blocked_circular_pseudo_label_leakage",
+      "note": "Evaluasi Stream B standalone diblokir karena dataset berstatus pseudo_labeled_llm (vektor 33D berasal dari prediksi LLM yang identik dengan target pseudo-label). Tambahkan kolom ground truth manusia tervalidasi untuk evaluasi Model B secara independen.",
+      "accuracy": null,
+      "macro_f1": null
+    },
+    "model_c_hybrid_fusion": {
+      "threshold": 0.2,
+      "support": 5,
+      "accuracy": 0.8,
+      "macro_precision": 0.4,
+      "macro_recall": 0.5,
+      "macro_f1": 0.4444,
+      "weighted_precision": 0.64,
+      "weighted_recall": 0.8,
+      "weighted_f1": 0.7111,
+      "roc_auc": 0.75,
+      "pr_auc": 0.95,
+      "calibration": {
+        "ece": 0.1589,
+        "mce": 0.3201,
+        "brier_score": 0.1587,
+        "log_loss": 0.4943
+      },
+      "confidence_intervals_95": {
+        "accuracy": [
+          0.4,
+          1.0
+        ],
+        "macro_f1": [
+          0.2857,
+          1.0
+        ],
+        "roc_auc": [
+          0.25,
+          1.0
+        ],
+        "pr_auc": [
+          0.7,
+          1.0
+        ]
+      },
+      "confusion_matrix": {
+        "tn": 0,
+        "fp": 1,
+        "fn": 0,
+        "tp": 4
+      },
+      "confusion_matrix_2x2": [
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          4
+        ]
+      ],
+      "per_class": {
+        "non_cyberbullying": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 1
+        },
+        "cyberbullying": {
+          "precision": 0.8,
+          "recall": 1.0,
+          "f1": 0.8889,
+          "support": 4
+        }
+      },
+      "implicitness_breakdown": {
+        "E0": {
+          "count": 4,
+          "correct": 3,
+          "accuracy": 0.75,
+          "macro_f1": 0.4286
+        },
+        "E1": {
+          "count": 1,
+          "correct": 1,
+          "accuracy": 1.0,
+          "macro_f1": 1.0
+        }
+      },
+      "type_breakdown": {
+        "BSH": {
+          "count": 2,
+          "correct": 2,
+          "accuracy": 1.0
+        },
+        "INS": {
+          "count": 2,
+          "correct": 2,
+          "accuracy": 1.0
+        },
+        "NONE": {
+          "count": 1,
+          "correct": 0,
+          "accuracy": 0.0
+        }
+      },
+      "error_analysis": {
+        "false_positive_count": 1,
+        "false_negative_count": 0,
+        "false_positive_rate": 1.0,
+        "false_negative_rate": 0.0,
+        "fp_samples": [
+          {
+            "text": "Anjirr ??",
+            "prob": 0.7381,
+            "implicit_level": "E0"
+          }
+        ],
+        "fn_samples": []
+      },
+      "model_name": "C. Hybrid Dual-Stream Fusion (IndoBERTweet + LLM Knowledge)"
     }
   }
 }

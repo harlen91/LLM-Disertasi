@@ -8,8 +8,8 @@ from config import (
     DEFAULT_SUMOPOD_MODEL,
     SUMOPOD_POPULAR_MODELS,
 )
-from core.model_engine import get_cached_sumopod_engine, get_cached_mock_engine
-from core.prompt_templates import DEFAULT_SYSTEM_PROMPT, LABEL_SCHEMA
+from core.model_engine import get_cached_sumopod_engine, get_cached_mock_engine, mask_secret
+from core.prompt_templates import DEFAULT_SYSTEM_PROMPT, LABEL_SCHEMA, PROMPT_VERSION
 
 
 def render_settings_page():
@@ -201,8 +201,9 @@ def render_settings_page():
             st.markdown("**Informasi Environment Host & API:**")
             st.markdown(f"- **Platform OS**: `{os.uname().sysname} {os.uname().machine}`")
             st.markdown(f"- **Backend LLM Utama**: `SumoPod AI Gateway ({sumo_model})`")
-            api_status = "Siap (API Key terisi)" if sumo_key else "API Key belum diisi (Mock Fallback aktif)"
+            api_status = f"Siap ({mask_secret(sumo_key)})" if sumo_key else "API Key belum diisi (Mock Fallback aktif)"
             st.markdown(f"- **Status Kredensial SumoPod**: `{api_status}`")
+            st.markdown(f"- **Prompt Version Aktif**: `{PROMPT_VERSION}`")
             st.markdown(f"- **PyTorch Version (IndoBERTweet)**: `{torch.__version__}`")
             st.markdown(f"- **MPS (Apple Silicon)**: `{'Tersedia' if torch.backends.mps.is_available() else 'Tidak'}`")
             st.markdown(f"- **Dataset Default**: `{DEFAULT_DATASET_PATH.name}` (`{'Ditemukan' if DEFAULT_DATASET_PATH.exists() else 'Tidak Ditemukan'}`)")

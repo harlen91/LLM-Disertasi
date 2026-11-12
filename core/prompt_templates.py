@@ -1,5 +1,7 @@
 from typing import List, Dict, Optional
 
+PROMPT_VERSION = "iicd-v2.0-sumopod"
+
 LABEL_SCHEMA = """
 Cyberbullying:
 YES / NO

@@ -1,7 +1,21 @@
 import re
 import json
 from typing import Dict, Any
-from .schema import sanitize_annotation_dict
+from .schema import sanitize_annotation_dict, MISSING_LABEL
+
+def _failed_parse_record(explanation: str, error: str) -> Dict[str, Any]:
+    """Returns an explicit UNKNOWN annotation record when JSON extraction fails."""
+    return {
+        "cyberbullying": MISSING_LABEL,
+        "type": MISSING_LABEL,
+        "emotion": MISSING_LABEL,
+        "cultural_context": MISSING_LABEL,
+        "implicit_level": MISSING_LABEL,
+        "severity": MISSING_LABEL,
+        "confidence": None,
+        "explanation": explanation,
+        "error": error,
+    }
 
 def extract_json_from_response(output: str) -> Dict[str, Any]:
     """
@@ -14,17 +28,7 @@ def extract_json_from_response(output: str) -> Dict[str, Any]:
     5. Regex-based field extraction fallback
     """
     if not output or not isinstance(output, str):
-        return {
-            "cyberbullying": "NO",
-            "type": "NONE",
-            "emotion": "NEU",
-            "cultural_context": "NONE",
-            "implicit_level": "E0",
-            "severity": "NONE",
-            "confidence": 0.0,
-            "explanation": "No output produced",
-            "error": "Empty model output"
-        }
+        return _failed_parse_record("No output produced", "Empty model output")
 
     # Step 1: Strip markdown code blocks if present
     cleaned = re.sub(r'```(?:json)?\s*', '', output)
@@ -45,17 +49,10 @@ def extract_json_from_response(output: str) -> Dict[str, Any]:
         json_str = snippet + "\n}"
 
     if not json_str:
-        return {
-            "cyberbullying": "NO",
-            "type": "NONE",
-            "emotion": "NEU",
-            "cultural_context": "NONE",
-            "implicit_level": "E0",
-            "severity": "NONE",
-            "confidence": 0.0,
-            "explanation": f"Failed to locate JSON brackets. Raw snippet: {output[:150]}...",
-            "error": "No JSON brackets found"
-        }
+        return _failed_parse_record(
+            f"Failed to locate JSON brackets. Raw snippet: {output[:150]}...",
+            "No JSON brackets found",
+        )
 
     # Step 3: Attempt direct parsing
     try:
@@ -97,17 +94,10 @@ def extract_json_from_response(output: str) -> Dict[str, Any]:
         sanitized = sanitize_annotation_dict(fallback)
         return sanitized
 
-    return {
-        "cyberbullying": "NO",
-        "type": "NONE",
-        "emotion": "NEU",
-        "cultural_context": "NONE",
-        "implicit_level": "E0",
-        "severity": "NONE",
-        "confidence": 0.0,
-        "explanation": f"JSON syntax error. Model response: {output[:200]}",
-        "error": "Malformed JSON"
-    }
+    return _failed_parse_record(
+        f"JSON syntax error. Model response: {output[:200]}",
+        "Malformed JSON",
+    )
 
 
 # Backward-compatible alias for legacy utilities

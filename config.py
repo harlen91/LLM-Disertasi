@@ -21,9 +21,19 @@ DEFAULT_DATASET_PATH = PROJECT_ROOT / "Dataset-Research.csv"
 OUTPUT_DIR = APP_DIR / "output"
 CHECKPOINTS_DIR = OUTPUT_DIR / "checkpoints"
 FINAL_DIR = OUTPUT_DIR / "final"
+MODELS_DIR = OUTPUT_DIR / "models"
+EVAL_REPORT_DIR = OUTPUT_DIR / "evaluation_report"
 
 CHECKPOINTS_DIR.mkdir(parents=True, exist_ok=True)
 FINAL_DIR.mkdir(parents=True, exist_ok=True)
+MODELS_DIR.mkdir(parents=True, exist_ok=True)
+EVAL_REPORT_DIR.mkdir(parents=True, exist_ok=True)
+
+# Pretrained Backbone & Research Versioning
+INDOBERTWEET_PRETRAINED_MODEL = "indolem/indobertweet-base-uncased"
+DEFAULT_RANDOM_SEED = 42
+APP_VERSION = "2.0.0"
+MODEL_MANIFEST_FILENAME = "model_manifest.json"
 
 # Taxonomy Reference
 TAXONOMY = {

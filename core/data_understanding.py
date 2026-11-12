@@ -286,139 +286,143 @@ def clean_and_normalize_social_text(
 
 
 # =============================================================================
-# 6. EKSTRAKSI VEKTOR PENGETAHUAN LLM (33-DIMENSI) DARI SUMOPOD API
+# 6. EKSTRAKSI TEACHER ANNOTATION FEATURES (33-DIMENSI) DARI SUMOPOD LLM
 # =============================================================================
 
-def extract_taxonomy_probability_vector(annotation_dict: Dict[str, Any]) -> np.ndarray:
+TEACHER_FEATURE_SCHEMA = [
+    {"dim_start": 0, "dim_end": 2, "task": "cyberbullying", "classes": TAXONOMY_VECTOR_MAP["cyberbullying"], "origin": "LLM teacher binary prediction (or actual logprobs if provided)"},
+    {"dim_start": 2, "dim_end": 11, "task": "type", "classes": TAXONOMY_VECTOR_MAP["type"], "origin": "LLM teacher bullying type prediction (or actual logprobs if provided)"},
+    {"dim_start": 11, "dim_end": 17, "task": "emotion", "classes": TAXONOMY_VECTOR_MAP["emotion"], "origin": "LLM teacher emotion prediction (or actual logprobs if provided)"},
+    {"dim_start": 17, "dim_end": 25, "task": "cultural_context", "classes": TAXONOMY_VECTOR_MAP["cultural_context"], "origin": "LLM teacher cultural context prediction (or actual logprobs if provided)"},
+    {"dim_start": 25, "dim_end": 28, "task": "implicit_level", "classes": TAXONOMY_VECTOR_MAP["implicit_level"], "origin": "LLM teacher implicitness level prediction (or actual logprobs if provided)"},
+    {"dim_start": 28, "dim_end": 32, "task": "severity", "classes": TAXONOMY_VECTOR_MAP["severity"], "origin": "LLM teacher severity prediction (or actual logprobs if provided)"},
+    {"dim_start": 32, "dim_end": 33, "task": "confidence", "classes": ["scalar_confidence"], "origin": "LLM self-reported decimal confidence scalar in [0.0, 1.0] (0.0 if missing)"},
+]
+
+
+def _encode_task_teacher_scores(
+    task_name: str,
+    raw_label: Any,
+    class_list: List[str],
+    class_probabilities: Optional[Dict[str, Dict[str, float]]] = None,
+) -> List[float]:
     """
-    Mengekstrak vektor probabilitas taksonomi 33-dimensi dari anotasi SumoPod LLM:
-    - [0:2]   : Cyberbullying Binary ([NO, YES])
-    - [2:11]  : Bullying Type (9 classes)
-    - [11:17] : Emotion (6 classes)
-    - [17:25] : Cultural Context (8 classes)
-    - [25:28] : Implicitness Level (3 classes)
-    - [28:32] : Severity Level (4 classes)
-    - [32]    : Normalized Confidence Scalar [0.0, 1.0]
-    
-    Total Dimensi: 33
+    Encodes a single taxonomy dimension into numeric teacher scores.
+    - If actual model probabilities (`class_probabilities[task_name]`) are supplied, uses them normalized.
+    - Otherwise encodes a clean one-hot indicator (1.0 for predicted category, 0.0 elsewhere) without
+      fabricating calibrated probabilities from self-reported confidence.
+    - Missing/UNKNOWN labels remain an all-zero vector instead of defaulting to another valid class.
     """
-    vec = []
-    conf = float(annotation_dict.get("confidence", 0.90))
-    conf = max(0.50, min(1.0, conf))
+    if isinstance(class_probabilities, dict) and isinstance(class_probabilities.get(task_name), dict):
+        prob_map = class_probabilities[task_name]
+        raw_probs = [max(0.0, float(prob_map.get(cls, 0.0))) for cls in class_list]
+        total = sum(raw_probs)
+        if total > 0.0:
+            return [round(p / total, 6) for p in raw_probs]
 
-    # 1. Cyberbullying (Binary) -> 2 dims
-    cb_val = str(annotation_dict.get("cyberbullying", "")).upper().strip()
-    if cb_val == "YES":
-        vec.extend([1.0 - conf, conf])
-    elif cb_val == "NO":
-        vec.extend([conf, 1.0 - conf])
-    else:
-        vec.extend([0.50, 0.50])
+    val = "" if raw_label is None else str(raw_label).upper().strip()
+    vec = [0.0] * len(class_list)
+    if val in class_list:
+        vec[class_list.index(val)] = 1.0
+    return vec
 
-    # 2. Type (9 dims)
-    t_val = str(annotation_dict.get("type", "")).upper().strip()
-    t_list = TAXONOMY_VECTOR_MAP["type"]
-    t_vec = [0.0] * len(t_list)
-    if t_val in t_list:
-        idx = t_list.index(t_val)
-        t_vec[idx] = conf
-        # Sebar sisa probabilitas ke kelas lain
-        remainder = (1.0 - conf) / (len(t_list) - 1)
-        for i in range(len(t_list)):
-            if i != idx:
-                t_vec[i] = remainder
-    else:
-        # Default to NONE
-        t_vec[t_list.index("NONE")] = conf
-    vec.extend(t_vec)
 
-    # 3. Emotion (6 dims)
-    e_val = str(annotation_dict.get("emotion", "")).upper().strip()
-    e_list = TAXONOMY_VECTOR_MAP["emotion"]
-    e_vec = [0.0] * len(e_list)
-    if e_val in e_list:
-        idx = e_list.index(e_val)
-        e_vec[idx] = conf
-        remainder = (1.0 - conf) / (len(e_list) - 1)
-        for i in range(len(e_list)):
-            if i != idx:
-                e_vec[i] = remainder
-    else:
-        e_vec[e_list.index("NEU")] = conf
-    vec.extend(e_vec)
+def extract_teacher_annotation_features(
+    annotation_dict: Dict[str, Any],
+    class_probabilities: Optional[Dict[str, Dict[str, float]]] = None,
+) -> np.ndarray:
+    """
+    Mengekstrak vektor 33-dimensi `teacher_scores` dari prediksi LLM SumoPod (BUKAN dari ground truth manusia):
+    - [0:2]   : teacher_cyberbullying ([NO, YES])
+    - [2:11]  : teacher_type (9 classes)
+    - [11:17] : teacher_emotion (6 classes)
+    - [17:25] : teacher_cultural_context (8 classes)
+    - [25:28] : teacher_implicit_level (3 classes)
+    - [28:32] : teacher_severity (4 classes)
+    - [32]    : teacher_confidence_score scalar [0.0, 1.0] (0.0 jika tidak tersedia)
 
-    # 4. Cultural Context (8 dims)
-    c_val = str(annotation_dict.get("cultural_context", "")).upper().strip()
-    c_list = TAXONOMY_VECTOR_MAP["cultural_context"]
-    c_vec = [0.0] * len(c_list)
-    if c_val in c_list:
-        idx = c_list.index(c_val)
-        c_vec[idx] = conf
-        remainder = (1.0 - conf) / (len(c_list) - 1)
-        for i in range(len(c_list)):
-            if i != idx:
-                c_vec[i] = remainder
-    else:
-        c_vec[c_list.index("NONE")] = conf
-    vec.extend(c_vec)
+    Catatan Metodologis:
+    - Apabila API mengembalikan probabilitas/logprobs aktual (`class_probabilities`), nilai aktual digunakan.
+    - Apabila hanya tersedia kategori diskret + confidence scalar, fitur kategori dikodekan sebagai
+      indikator teacher scores biner (one-hot) dan confidence diletakkan pada dimensi ke-32 tanpa
+      mengklaim sebaran buatan sebagai probabilitas terkalibrasi.
+    - Nilai UNKNOWN/missing dikodekan sebagai nol (zero vector).
+    """
+    # Prefer explicit `llm_*` keys if present so ground-truth columns are never touched
+    def _pick(field: str) -> Any:
+        llm_key = f"llm_{field}"
+        return annotation_dict.get(llm_key, annotation_dict.get(field))
 
-    # 5. Implicit Level (3 dims)
-    i_val = str(annotation_dict.get("implicit_level", "")).upper().strip()
-    i_list = TAXONOMY_VECTOR_MAP["implicit_level"]
-    i_vec = [0.0] * len(i_list)
-    if i_val in i_list:
-        idx = i_list.index(i_val)
-        i_vec[idx] = conf
-        remainder = (1.0 - conf) / (len(i_list) - 1)
-        for i in range(len(i_list)):
-            if i != idx:
-                i_vec[i] = remainder
-    else:
-        i_vec[i_list.index("E0")] = conf
-    vec.extend(i_vec)
+    raw_conf = _pick("confidence")
+    try:
+        conf = 0.0 if raw_conf is None or (isinstance(raw_conf, float) and np.isnan(raw_conf)) else float(raw_conf)
+    except (TypeError, ValueError):
+        conf = 0.0
+    conf = float(max(0.0, min(1.0, conf)))
 
-    # 6. Severity (4 dims)
-    s_val = str(annotation_dict.get("severity", "")).upper().strip()
-    s_list = TAXONOMY_VECTOR_MAP["severity"]
-    s_vec = [0.0] * len(s_list)
-    if s_val in s_list:
-        idx = s_list.index(s_val)
-        s_vec[idx] = conf
-        remainder = (1.0 - conf) / (len(s_list) - 1)
-        for i in range(len(s_list)):
-            if i != idx:
-                s_vec[i] = remainder
-    else:
-        s_vec[s_list.index("NONE")] = conf
-    vec.extend(s_vec)
-
-    # 7. Confidence Scalar (1 dim)
+    vec: List[float] = []
+    for task_key in ["cyberbullying", "type", "emotion", "cultural_context", "implicit_level", "severity"]:
+        vec.extend(
+            _encode_task_teacher_scores(
+                task_name=task_key,
+                raw_label=_pick(task_key),
+                class_list=TAXONOMY_VECTOR_MAP[task_key],
+                class_probabilities=class_probabilities,
+            )
+        )
     vec.append(conf)
+    arr = np.array(vec, dtype=np.float32)
+    assert arr.shape == (TOTAL_VECTOR_DIM,), f"Expected {TOTAL_VECTOR_DIM} features, got {arr.shape}"
+    return arr
 
-    return np.array(vec, dtype=np.float32)
+
+def extract_taxonomy_probability_vector(
+    annotation_dict: Dict[str, Any],
+    class_probabilities: Optional[Dict[str, Dict[str, float]]] = None,
+) -> np.ndarray:
+    """
+    Backward-compatible alias for `extract_teacher_annotation_features()`.
+    Mengembalikan teacher annotation features 33-dimensi (menggunakan probabilitas aktual jika
+    disediakan melalui `class_probabilities`, atau indikator kategori diskret + scalar confidence
+    tanpa mengklaim sebagai probabilitas terkalibrasi).
+    """
+    return extract_teacher_annotation_features(
+        annotation_dict=annotation_dict,
+        class_probabilities=class_probabilities,
+    )
+
+
+def get_teacher_feature_names() -> List[str]:
+    """Mengembalikan daftar nama fitur eksplisit untuk ke-33 dimensi teacher annotation features."""
+    names: List[str] = []
+    for k, classes in TAXONOMY_VECTOR_MAP.items():
+        for c in classes:
+            names.append(f"teacher_{k}_{c}")
+    names.append("teacher_confidence_score")
+    return names
 
 
 def get_taxonomy_vector_feature_names() -> List[str]:
-    """Mengembalikan daftar nama fitur untuk ke-33 dimensi vektor probabilitas taksonomi."""
-    names = []
-    for k, classes in TAXONOMY_VECTOR_MAP.items():
-        for c in classes:
-            names.append(f"{k}_{c}")
-    names.append("confidence_score")
-    return names
+    """Backward-compatible alias returning the 33-dim feature names."""
+    return get_teacher_feature_names()
+
+
+def get_teacher_feature_schema() -> List[Dict[str, Any]]:
+    """Returns full documentation metadata for every dimension group of the 33-dim vector."""
+    return TEACHER_FEATURE_SCHEMA
 
 
 def format_structured_rationale(annotation_dict: Dict[str, Any]) -> str:
     """
-    Memformat teks penalaran SumoPod LLM menjadi teks berstruktur ringkas
-    untuk di-encode bersama teks komentar oleh Transformer Encoder:
-    [CLS] komentar [SEP] rationale [SEP]
+    Memformat teks penjelasan LLM (explanation) untuk tampilan analitik / Dual-XAI.
+    PERINGATAN METODOLOGIS: Jangan menyisipkan tag label target ([Konteks: ... | Tipe: ...]) ke dalam
+    teks input pelatihan/evaluasi ketika label target berasal dari anotasi yang sama (mencegah target leakage).
     """
-    cult = annotation_dict.get("cultural_context", "NONE")
-    emo = annotation_dict.get("emotion", "NEU")
-    impl = annotation_dict.get("implicit_level", "E0")
-    btype = annotation_dict.get("type", "NONE")
-    explanation = str(annotation_dict.get("explanation", "")).strip()
+    cult = annotation_dict.get("llm_cultural_context", annotation_dict.get("cultural_context", "NONE"))
+    emo = annotation_dict.get("llm_emotion", annotation_dict.get("emotion", "NEU"))
+    impl = annotation_dict.get("llm_implicit_level", annotation_dict.get("implicit_level", "E0"))
+    btype = annotation_dict.get("llm_type", annotation_dict.get("type", "NONE"))
+    explanation = str(annotation_dict.get("llm_explanation", annotation_dict.get("explanation", ""))).strip()
 
     prefix = f"[Konteks: {cult} | Emosi: {emo} | Tipe: {btype} | Implisit: {impl}]"
     if explanation:

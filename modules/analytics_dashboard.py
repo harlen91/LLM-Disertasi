@@ -44,9 +44,23 @@ def render_analytics_dashboard_page():
         st.info("Silakan muat dataset yang telah memiliki kolom anotasi (`cyberbullying`, `type`, dll.).")
         return
 
-    # Clean & standardize fields
+    # Clean & standardize fields + warn on mock or pseudo-labeled source
     df = current_df.copy()
+    if "annotation_source" in df.columns and (df["annotation_source"].astype(str) == "mock_simulation").any():
+        mock_n = int((df["annotation_source"].astype(str) == "mock_simulation").sum())
+        st.warning(f"⚠️ Dataset memuat {mock_n} baris simulasi (`mock_simulation`) yang bukan anotasi LLM riset.")
+    if "target_source" in df.columns:
+        ts = str(df["target_source"].iloc[0])
+        if ts == "pseudo_labeled_llm":
+            st.info("ℹ️ Status Dataset: **Pseudo-Labeled LLM** (belum memiliki ground truth manusia tervalidasi independen).")
     df["cyberbullying"] = df["cyberbullying"].astype(str).str.upper().str.strip()
+    if "error" in df.columns:
+        err_rows = int(df["error"].notna().sum())
+        if err_rows > 0:
+            st.caption(f"ℹ️ Catatan kualitas data: {err_rows} baris memiliki error JSON dan dikecualikan dari distribusi valid apabila bernilai UNKNOWN.")
+    df_valid = df[df["cyberbullying"].isin(["YES", "NO"])].copy()
+    if not df_valid.empty:
+        df = df_valid
 
     st.markdown("---")
     

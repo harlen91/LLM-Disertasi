@@ -1,0 +1,99 @@
+{
+  "dataset_version": "iicd-curated-cfa1f94321d2",
+  "curated_at": "2026-11-12T07:11:44.714285+00:00",
+  "input_source": "/Users/harlengilbertsimanullang/Documents/Disertasi/LLM-Augmented Explainable/iicd_annotation_app/output/checkpoints/checkpoint_Dataset-Research.csv",
+  "output_dataset": "/Users/harlengilbertsimanullang/Documents/Disertasi/LLM-Augmented Explainable/iicd_annotation_app/output/final/iicd_cleaned_indobertweet.csv",
+  "has_human_ground_truth": false,
+  "label_source": "pseudo_labeled_llm",
+  "pseudo_labeled_warning": "Dataset belum memiliki ground truth manusia independen; seluruh metrik mengevaluasi kesepakatan/distilasi terhadap pseudo-label LLM.",
+  "raw_audit": {
+    "total_rows": 1508,
+    "text_column": "comment",
+    "human_ground_truth_column": null,
+    "has_human_ground_truth": false,
+    "label_source": "pseudo_labeled_llm",
+    "missing_values_per_column": {
+      "sentiment": 0,
+      "comment": 0,
+      "cyberbullying": 1458,
+      "type": 1458,
+      "emotion": 1458,
+      "cultural_context": 1458,
+      "implicit_level": 1458,
+      "severity": 1458,
+      "confidence": 1458,
+      "explanation": 1458,
+      "error": 1508,
+      "llm_model": 1458,
+      "prompt_version": 1458,
+      "annotated_at": 1458,
+      "annotation_source": 1458,
+      "is_mock": 1458
+    },
+    "empty_comments": 0,
+    "short_comments_lt_3": 2,
+    "raw_duplicates": 8,
+    "normalized_duplicates": 13,
+    "invalid_confidence_count": 1458,
+    "invalid_taxonomy_rows": 1458,
+    "consistency_issue_rows": 1458,
+    "mock_simulation_rows": 0
+  },
+  "dedup_dropped": 0,
+  "final_rows": 49,
+  "teacher_vector_dim": 33,
+  "class_distribution": {
+    "cyberbullying_binary": {
+      "1": 38,
+      "0": 11
+    },
+    "type": {
+      "INS": 24,
+      "NONE": 11,
+      "BSH": 10,
+      "SAR": 3,
+      "DIS": 1
+    },
+    "emotion": {
+      "MOCK": 30,
+      "NEU": 11,
+      "DIS": 5,
+      "ANG": 3
+    },
+    "cultural_context": {
+      "NONE": 25,
+      "APP": 17,
+      "STA": 4,
+      "GEN": 1,
+      "INT": 1,
+      "FAM": 1
+    },
+    "implicit_level": {
+      "E0": 28,
+      "E1": 21
+    },
+    "severity": {
+      "LOW": 30,
+      "NONE": 11,
+      "MEDIUM": 8
+    }
+  },
+  "splits": {
+    "random_state": 42,
+    "train_size": 39,
+    "val_size": 5,
+    "test_size": 5,
+    "cross_split_leakage_check": {
+      "comment": {
+        "train_val_overlap": 0,
+        "train_test_overlap": 0,
+        "val_test_overlap": 0
+      },
+      "comment_normalized": {
+        "train_val_overlap": 0,
+        "train_test_overlap": 0,
+        "val_test_overlap": 0
+      }
+    }
+  }
+}

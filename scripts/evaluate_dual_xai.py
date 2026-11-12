@@ -2,54 +2,49 @@
 """
 scripts/evaluate_dual_xai.py
 ----------------------------
-Skrip Evaluasi Empiris Keterjelasan Ganda (Dual Explainability Benchmark):
-Menguji keselarasan antara Atribusi Fitur Token Kuantitatif (SHAP)
-dengan Penalaran Kualitatif Bahasa Alami (LLaMA-3 Chain-of-Thought Rationale)
-di seluruh data uji independen (test.csv, 150 sampel).
-
-Tujuan Penelitian Disertasi (Bab 4):
-1. Mengukur tingkat konsistensi empiris (Dual-XAI Alignment Rate) antara SHAP dan CoT.
-2. Menganalisis perbedaan keselarasan pada berbagai tingkat keterbukaan ujaran:
-   - E0 (Sangat Eksplisit)
-   - E1 (Semi-Tersirat)
-   - E2 (Tersirat Penuh / Kontekstual Budaya)
-3. Mengidentifikasi kata kunci pemicu dengan konsensus tertinggi (High Saliency Consensus).
-4. Menghasilkan tabel LaTeX resmi untuk naskah disertasi.
+Evaluasi Empiris Dual Explainability (Real SHAP Library vs SumoPod LLM CoT Rationale):
+1. Menggunakan library `shap` sebenarnya pada `HybridFusionModel` (default) atau baseline IndoBERTweet.
+2. Menghitung atribusi lokal, global feature importance, & faithfulness (comprehensiveness).
+3. Memisahkan metrik ilmiah faithfulness dari metrik diagnostik pencocokan kata leksikal (`align_shap_with_cot`).
+4. Menghormati target_source / modality masking agar tidak membocorkan label pseudo ke input XAI.
 """
 
-import os
-import sys
-import json
 import argparse
+import json
+import sys
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
 import numpy as np
 import pandas as pd
-from pathlib import Path
-from typing import Dict, Any, List
 
-# Setup Project Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_DIR = SCRIPT_DIR.parent
 sys.path.insert(0, str(PROJECT_DIR))
 
-from core.shap_explainer import HybridSHAPExplainer, align_shap_with_cot
+from config import EVAL_REPORT_DIR, FINAL_DIR, MODELS_DIR
+from core.shap_explainer import (
+    HybridSHAPExplainer,
+    align_shap_with_cot,
+    compute_faithfulness_comprehensiveness,
+)
 
-DEFAULT_TEST_CSV = PROJECT_DIR / "output" / "final" / "test.csv"
-DEFAULT_MODEL_PATH = PROJECT_DIR / "output" / "models" / "indobertweet_cyberbullying" / "best_model"
-DEFAULT_REPORT_DIR = PROJECT_DIR / "output" / "evaluation_report"
+DEFAULT_TEST_CSV = FINAL_DIR / "test.csv"
+DEFAULT_HYBRID_WEIGHTS = MODELS_DIR / "hybrid_fusion_indobertweet" / "best_hybrid_model.pt"
+DEFAULT_BASELINE_DIR = MODELS_DIR / "indobertweet_cyberbullying" / "best_model"
 
 
 def evaluate_dual_xai_benchmark(
     test_csv_path: Path,
-    model_path: Path,
-    output_dir: Path,
-    max_samples: int = None
+    model_path: Optional[Path] = None,
+    model_type: str = "hybrid",
+    output_dir: Path = EVAL_REPORT_DIR,
+    max_samples: Optional[int] = None,
+    shap_max_evals: int = 100,
 ) -> Dict[str, Any]:
-    print("=" * 75)
-    print("🔬 MEMULAI EVALUASI EMPIRIS DUAL EXPLAINABILITY (SHAP ⟷ LLM CoT)")
-    print("=" * 75)
-    print(f"📂 Berkas Test Set : {test_csv_path}")
-    print(f"🧠 Model Backbone  : {model_path}")
-    print(f"📊 Direktori Output: {output_dir}\n")
+    print("=" * 76)
+    print("🔬 EVALUASI EMPIRIS DUAL EXPLAINABILITY (REAL SHAP ⟷ SUMOPOD LLM CoT)")
+    print("=" * 76)
 
     if not test_csv_path.exists():
         raise FileNotFoundError(f"Berkas test set tidak ditemukan: {test_csv_path}")
@@ -58,174 +53,149 @@ def evaluate_dual_xai_benchmark(
     if max_samples is not None and max_samples < len(df_test):
         df_test = df_test.head(max_samples)
     total_test = len(df_test)
-    print(f"📋 Total sampel uji yang dievaluasi: {total_test} baris")
 
-    # Inisialisasi SHAP Explainer
-    print("⚡ Menginisialisasi HybridSHAPExplainer...")
-    explainer = HybridSHAPExplainer(model_path_or_name=str(model_path))
+    resolved_model = model_path or (DEFAULT_HYBRID_WEIGHTS if model_type == "hybrid" else DEFAULT_BASELINE_DIR)
+    explainer = HybridSHAPExplainer(model_path=resolved_model, model_type=model_type)
 
-    results = []
-    print("\n⏳ Mengekstrak atribusi SHAP & menghitung keselarasan CoT per sampel...")
+    # Cek apakah dataset berstatus human_ground_truth atau pseudo_labeled_llm
+    target_source = str(df_test["target_source"].iloc[0]) if "target_source" in df_test.columns and len(df_test) > 0 else "pseudo_labeled_llm"
+    test_vec_path = test_csv_path.parent / "test_llm_vectors.npy"
+    test_vecs = None
+    if model_type == "hybrid" and target_source == "human_ground_truth" and test_vec_path.exists():
+        test_vecs = np.load(test_vec_path)[:total_test]
+
+    results: List[Dict[str, Any]] = []
+    comprehensiveness_scores: List[float] = []
 
     for idx, row in df_test.iterrows():
-        comment = str(row.get("comment", "")).strip()
-        explanation = str(row.get("explanation", "")).strip()
-        cb_label = str(row.get("cyberbullying", "NO")).upper()
-        impl_level = str(row.get("implicit_level", "E0")).upper()
-        b_type = str(row.get("type", "NONE")).upper()
+        comment = str(row.get("comment_normalized", row.get("comment", ""))).strip()
+        explanation = str(row.get("llm_explanation", row.get("explanation", ""))).strip()
+        cb_label = str(row.get("target_cyberbullying", row.get("cyberbullying", "NO"))).upper()
+        impl_level = str(row.get("target_implicit_level", row.get("implicit_level", "E0"))).upper()
+        b_type = str(row.get("target_type", row.get("type", "NONE"))).upper()
+        vec = test_vecs[idx] if test_vecs is not None else None
 
-        # 1. Hitung SHAP Token Attribution
-        shap_res = explainer.explain_text(comment, top_k=5)
+        shap_res = explainer.explain_text(comment, llm_vector=vec, max_evals=shap_max_evals, top_k=5)
+        comp_score = compute_faithfulness_comprehensiveness(explainer, comment, shap_res, llm_vector=vec)
+        if comp_score is not None:
+            comprehensiveness_scores.append(comp_score)
 
-        # 2. Hitung Penyelarasan Dual-XAI
-        align_info = align_shap_with_cot(shap_res, explanation)
-
-        results.append({
-            "idx": idx,
-            "comment": comment,
-            "cyberbullying": cb_label,
-            "implicit_level": impl_level,
-            "type": b_type,
-            "cyberbullying_prob": shap_res["cyberbullying_prob"],
-            "top_shap_tokens": [t["token"] for t in shap_res.get("top_positive_tokens", [])],
-            "aligned_tokens": align_info["aligned_tokens"],
-            "alignment_score": align_info["alignment_score"],
-            "is_aligned": align_info["is_aligned"]
-        })
+        align_info = align_shap_with_cot(shap_res, explanation, comprehensiveness_score=comp_score)
+        results.append(
+            {
+                "idx": int(idx),
+                "comment": str(row.get("comment", comment)),
+                "cyberbullying": cb_label,
+                "implicit_level": impl_level,
+                "type": b_type,
+                "cyberbullying_prob": shap_res["cyberbullying_prob"],
+                "top_positive_shap_tokens": [t["token"] for t in shap_res.get("top_positive_tokens", [])],
+                "top_negative_shap_tokens": [t["token"] for t in shap_res.get("top_negative_tokens", [])],
+                "faithfulness_comprehensiveness": comp_score,
+                "diagnostic_lexical_aligned_tokens": align_info["aligned_tokens"],
+                "diagnostic_lexical_alignment_score": align_info["alignment_score"],
+                "is_lexically_aligned": align_info["is_aligned"],
+            }
+        )
 
         if (idx + 1) % 25 == 0 or (idx + 1) == total_test:
             print(f"  Processed {idx + 1}/{total_test} sampel...")
 
     df_res = pd.DataFrame(results)
+    mean_lexical = float(df_res["diagnostic_lexical_alignment_score"].mean()) if len(df_res) > 0 else 0.0
+    lexical_rate = float(df_res["is_lexically_aligned"].mean() * 100.0) if len(df_res) > 0 else 0.0
+    mean_comp = round(float(np.mean(comprehensiveness_scores)), 4) if comprehensiveness_scores else None
 
-    # =========================================================================
-    # ANALISIS STATISTIK AGREGAT
-    # =========================================================================
-    print("\n" + "=" * 70)
-    print("📊 HASIL EVALUASI STATISTIK DUAL EXPLAINABILITY")
-    print("=" * 70)
-
-    # 1. Metrik Global
-    mean_align_global = float(df_res["alignment_score"].mean())
-    align_rate_global = float(df_res["is_aligned"].mean() * 100.0)
-    print(f"  • Rata-rata Skor Keselarasan Global (Mean Alignment) : {mean_align_global:.2f}%")
-    print(f"  • Tingkat Konsistensi Global (Alignment Rate >= 50%)  : {align_rate_global:.2f}%")
-
-    # 2. Breakdown per Tingkat Keterbukaan Ujaran (Implicitness)
-    print("\n  📈 Keselarasan per Tingkat Keterbukaan (Implicitness Level):")
-    impl_stats = {}
-    for level in ["E0", "E1", "E2"]:
-        sub = df_res[df_res["implicit_level"] == level]
+    impl_stats: Dict[str, Any] = {}
+    for lvl in ["E0", "E1", "E2"]:
+        sub = df_res[df_res["implicit_level"] == lvl]
         if len(sub) > 0:
-            sub_mean = float(sub["alignment_score"].mean())
-            sub_rate = float(sub["is_aligned"].mean() * 100.0)
-            impl_stats[level] = {
-                "count": len(sub),
-                "mean_alignment": round(sub_mean, 2),
-                "alignment_rate": round(sub_rate, 2)
+            impl_stats[lvl] = {
+                "count": int(len(sub)),
+                "mean_diagnostic_lexical_alignment": round(float(sub["diagnostic_lexical_alignment_score"].mean()), 2),
+                "lexical_alignment_rate": round(float(sub["is_lexically_aligned"].mean() * 100.0), 2),
+                "mean_comprehensiveness": round(float(sub["faithfulness_comprehensiveness"].dropna().mean()), 4)
+                if sub["faithfulness_comprehensiveness"].notna().any()
+                else None,
             }
-            desc = "E0 (Sangat Eksplisit)" if level == "E0" else ("E1 (Semi-Tersirat)" if level == "E1" else "E2 (Tersirat Kultural)")
-            print(f"    - {desc:28}: {len(sub):2d} sampel | Skor: {sub_mean:5.2f}% | Konsisten: {sub_rate:5.2f}%")
 
-    # 3. Breakdown per Cyberbullying (YES vs NO)
-    cb_yes = df_res[df_res["cyberbullying"] == "YES"]
-    cb_no = df_res[df_res["cyberbullying"] == "NO"]
-    cb_stats = {
-        "YES": {
-            "count": len(cb_yes),
-            "mean_alignment": round(float(cb_yes["alignment_score"].mean()), 2) if len(cb_yes) > 0 else 0.0,
-            "alignment_rate": round(float(cb_yes["is_aligned"].mean() * 100.0), 2) if len(cb_yes) > 0 else 0.0
-        },
-        "NO": {
-            "count": len(cb_no),
-            "mean_alignment": round(float(cb_no["alignment_score"].mean()), 2) if len(cb_no) > 0 else 0.0,
-            "alignment_rate": round(float(cb_no["is_aligned"].mean() * 100.0), 2) if len(cb_no) > 0 else 0.0
-        }
-    }
+    global_imp = explainer.compute_global_importance(
+        texts=df_res["comment"].tolist(),
+        llm_vectors=test_vecs,
+        max_samples=min(20, len(df_res)),
+    )
 
-    # 4. Top Agreed Trigger Words (Kata Kunci Paling Sering Disepakati)
-    all_agreed = []
-    for al in df_res["aligned_tokens"]:
-        all_agreed.extend(al)
-    agreed_counts = pd.Series(all_agreed).value_counts().head(10).to_dict()
-
-    print("\n  🔝 Top 5 Kata Pemicu dengan Konsensus Tertinggi (SHAP & CoT):")
-    for tok, c in list(agreed_counts.items())[:5]:
-        print(f"    - '{tok}': {c} kemunculan")
-
-    # =========================================================================
-    # EKSPOR KE JSON & LATEX TABLE UNTUK DISERTASI
-    # =========================================================================
     output_dir.mkdir(parents=True, exist_ok=True)
     summary_report = {
-        "evaluation_name": "Empirical Dual Explainability Benchmark (SHAP vs LLaMA-3 CoT)",
+        "evaluation_name": f"Dual Explainability Benchmark (SHAP Library [{model_type}] vs SumoPod LLM CoT)",
+        "shap_method": "shap.Explainer(shap.maskers.Text) + shap.Explainer(Tabular Permutation)",
+        "model_type": model_type,
+        "target_source": target_source,
+        "llm_vector_conditioning": "active_human_gt" if test_vecs is not None else "modality_masked_zeros",
         "total_test_samples": total_test,
-        "global_metrics": {
-            "mean_alignment_score": round(mean_align_global, 2),
-            "alignment_rate_percentage": round(align_rate_global, 2)
+        "scientific_faithfulness_metrics": {
+            "mean_comprehensiveness": mean_comp,
+            "samples_measured": len(comprehensiveness_scores),
+        },
+        "diagnostic_lexical_heuristics": {
+            "disclaimer": "Metrik lexical overlap bersifat diagnostik heuristik, bukan ukuran validitas kausal tervalidasi.",
+            "mean_lexical_alignment_score": round(mean_lexical, 2),
+            "lexical_alignment_rate_percentage": round(lexical_rate, 2),
         },
         "implicitness_breakdown": impl_stats,
-        "cyberbullying_breakdown": cb_stats,
-        "top_agreed_trigger_words": agreed_counts,
-        "detailed_sample_results": results
+        "global_feature_importance": global_imp,
+        "detailed_sample_results": results,
     }
 
     json_path = output_dir / "dual_xai_evaluation.json"
     with open(json_path, "w", encoding="utf-8") as f:
-        json.dump(summary_report, f, indent=2)
-    print(f"\n💾 Laporan JSON lengkap tersimpan di: {json_path}")
+        json.dump(summary_report, f, indent=2, ensure_ascii=False)
 
-    # Generate Tabel LaTeX Bab 4
-    e0_m = impl_stats.get("E0", {}).get("mean_alignment", 0.0)
-    e0_r = impl_stats.get("E0", {}).get("alignment_rate", 0.0)
-    e1_m = impl_stats.get("E1", {}).get("mean_alignment", 0.0)
-    e1_r = impl_stats.get("E1", {}).get("alignment_rate", 0.0)
-    e2_m = impl_stats.get("E2", {}).get("mean_alignment", 0.0)
-    e2_r = impl_stats.get("E2", {}).get("alignment_rate", 0.0)
-
-    latex_code = f"""% Tabel Bab 4: Hasil Evaluasi Empiris Penyelarasan Dual-XAI (SHAP vs CoT Rationale)
+    e0 = impl_stats.get("E0", {})
+    e1 = impl_stats.get("E1", {})
+    e2 = impl_stats.get("E2", {})
+    latex_code = f"""% Tabel Bab 4: Evaluasi Dual-XAI (SHAP Kuantitatif vs Diagnostik Leksikal SumoPod LLM CoT)
 \\begin{{table}}[htbp]
 \\centering
-\\caption{{Evaluasi Konsistensi Keterjelasan Ganda (Dual-XAI Alignment) antara Atribusi Token SHAP Kuantitatif dan Penalaran Kualitatif LLaMA-3 pada Berbagai Tingkat Keterbukaan Ujaran.}}
+\\caption{{Evaluasi Keterjelasan SHAP dan Diagnostik Keselarasan Leksikal dengan Penalaran SumoPod LLM ({model_type})}}
 \\label{{tab:dual_xai_consistency}}
-\\begin{{tabular}}{{lcccc}}
+\\begin{{tabular}}{{lccc}}
 \\hline
-\\textbf{{Tingkat Keterbukaan Ujaran}} & \\textbf{{Jumlah Sampel}} & \\textbf{{Rata-rata Keselarasan (\\%)}} & \\textbf{{Konsistensi ($\\ge 50$\\%)}}\\\\
+\\textbf{{Tingkat Ujaran}} & \\textbf{{Sampel}} & \\textbf{{Comprehensiveness ($\\Delta p$)}} & \\textbf{{Diagnostik Overlap (\\%)}} \\\\
 \\hline
-E0 (Sangat Eksplisit)      & {impl_stats.get('E0', {}).get('count', 0)} & {e0_m:.2f}\\% & {e0_r:.2f}\\% \\\\
-E1 (Semi-Tersirat)          & {impl_stats.get('E1', {}).get('count', 0)} & {e1_m:.2f}\\% & {e1_r:.2f}\\% \\\\
-E2 (Tersirat / Kontekstual) & {impl_stats.get('E2', {}).get('count', 0)} & {e2_m:.2f}\\% & {e2_r:.2f}\\% \\\\
+E0 (Eksplisit) & {e0.get('count', 0)} & {e0.get('mean_comprehensiveness', 'N/A')} & {e0.get('mean_diagnostic_lexical_alignment', 0.0):.2f}\\% \\\\
+E1 (Semi-Tersirat) & {e1.get('count', 0)} & {e1.get('mean_comprehensiveness', 'N/A')} & {e1.get('mean_diagnostic_lexical_alignment', 0.0):.2f}\\% \\\\
+E2 (Tersirat) & {e2.get('count', 0)} & {e2.get('mean_comprehensiveness', 'N/A')} & {e2.get('mean_diagnostic_lexical_alignment', 0.0):.2f}\\% \\\\
 \\hline
-\\textbf{{Total / Rata-rata Global}} & \\textbf{{{total_test}}} & \\textbf{{{mean_align_global:.2f}\\%}} & \\textbf{{{align_rate_global:.2f}\\%}} \\\\
+\\textbf{{Global}} & \\textbf{{{total_test}}} & \\textbf{{{mean_comp if mean_comp is not None else 'N/A'}}} & \\textbf{{{mean_lexical:.2f}\\%}} \\\\
 \\hline
 \\end{{tabular}}
 \\end{{table}}
 """
-    latex_path = output_dir / "table_dual_xai_breakdown.tex"
-    with open(latex_path, "w", encoding="utf-8") as f:
+    with open(output_dir / "table_dual_xai_breakdown.tex", "w", encoding="utf-8") as f:
         f.write(latex_code)
-    print(f"📝 Tabel LaTeX Bab 4 tersimpan di  : {latex_path}")
 
-    print("=" * 75)
-    print("🎉 EVALUASI DUAL EXPLAINABILITY BERHASIL DISELESAIKAN!")
-    print("=" * 75)
-
+    print(f"💾 Dual-XAI JSON & LaTeX tersimpan di: {output_dir}")
     return summary_report
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Evaluasi Dual Explainability SHAP vs CoT")
+    parser = argparse.ArgumentParser(description="Evaluasi Dual Explainability (Real SHAP vs SumoPod LLM)")
     parser.add_argument("--test-csv", type=str, default=str(DEFAULT_TEST_CSV))
-    parser.add_argument("--model-path", type=str, default=str(DEFAULT_MODEL_PATH))
-    parser.add_argument("--output-dir", type=str, default=str(DEFAULT_REPORT_DIR))
-    parser.add_argument("--max-samples", type=int, default=None, help="Maksimal sampel uji yang dievaluasi")
+    parser.add_argument("--model-path", type=str, default=None)
+    parser.add_argument("--model-type", type=str, default="hybrid", choices=["hybrid", "baseline"])
+    parser.add_argument("--output-dir", type=str, default=str(EVAL_REPORT_DIR))
+    parser.add_argument("--max-samples", type=int, default=None)
+    parser.add_argument("--max-evals", type=int, default=100)
     args = parser.parse_args()
 
     evaluate_dual_xai_benchmark(
         test_csv_path=Path(args.test_csv),
-        model_path=Path(args.model_path),
+        model_path=Path(args.model_path) if args.model_path else None,
+        model_type=args.model_type,
         output_dir=Path(args.output_dir),
-        max_samples=args.max_samples
+        max_samples=args.max_samples,
+        shap_max_evals=args.max_evals,
     )
 
 
