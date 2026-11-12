@@ -1,0 +1,21 @@
+{
+  "model_architecture": "Hybrid Dual-Stream (IndoBERTweet + SumoPod LLaMA-3 33D)",
+  "pretrained_backbone": "indolem/indobertweet-base-uncased",
+  "best_epoch": 1,
+  "epochs_trained": 4,
+  "optimal_threshold": 0.3,
+  "test_metrics": {
+    "accuracy": 1.0,
+    "macro_f1": 1.0,
+    "roc_auc": 1.0,
+    "type_accuracy": 0.9467,
+    "emotion_accuracy": 0.9733,
+    "mean_gating_z": 0.4668,
+    "confusion_matrix": {
+      "tn": 81,
+      "fp": 0,
+      "fn": 0,
+      "tp": 69
+    }
+  }
+}

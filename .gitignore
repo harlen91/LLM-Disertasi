@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+
+# macOS
+.DS_Store
+
+# Secrets & Environment
+.env
+.env.*
+.streamlit/secrets.toml
+
+# Large model weights & training checkpoints (>100 MB exceeds GitHub limit)
+*.pt
+*.pth
+*.safetensors
+*.ckpt
+*.h5
+*.onnx
+output/models/*/checkpoints/
+output/models/**/checkpoints/

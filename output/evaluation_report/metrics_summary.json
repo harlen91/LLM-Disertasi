@@ -1,0 +1,38 @@
+{
+  "accuracy": 0.78,
+  "macro_precision": 0.7815,
+  "macro_recall": 0.7748,
+  "macro_f1": 0.7764,
+  "weighted_precision": 0.7808,
+  "weighted_recall": 0.78,
+  "weighted_f1": 0.7787,
+  "roc_auc": 0.8576,
+  "log_loss": 0.4745,
+  "confusion_matrix": [
+    [
+      68,
+      13
+    ],
+    [
+      20,
+      49
+    ]
+  ],
+  "per_class": {
+    "non_cyberbullying": {
+      "precision": 0.7727,
+      "recall": 0.8395,
+      "f1": 0.8047,
+      "support": 81
+    },
+    "cyberbullying": {
+      "precision": 0.7903,
+      "recall": 0.7101,
+      "f1": 0.7481,
+      "support": 69
+    }
+  },
+  "optimal_threshold": 0.48,
+  "baseline_accuracy": 0.7667,
+  "baseline_macro_f1": 0.762
+}

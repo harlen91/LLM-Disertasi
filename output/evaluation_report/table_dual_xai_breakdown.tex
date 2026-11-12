@@ -1,0 +1,17 @@
+% Tabel Bab 4: Hasil Evaluasi Empiris Penyelarasan Dual-XAI (SHAP vs CoT Rationale)
+\begin{table}[htbp]
+\centering
+\caption{Evaluasi Konsistensi Keterjelasan Ganda (Dual-XAI Alignment) antara Atribusi Token SHAP Kuantitatif dan Penalaran Kualitatif LLaMA-3 pada Berbagai Tingkat Keterbukaan Ujaran.}
+\label{tab:dual_xai_consistency}
+\begin{tabular}{lcccc}
+\hline
+\textbf{Tingkat Keterbukaan Ujaran} & \textbf{Jumlah Sampel} & \textbf{Rata-rata Keselarasan (\%)} & \textbf{Konsistensi ($\ge 50$\%)}\\
+\hline
+E0 (Sangat Eksplisit)      & 103 & 32.83\% & 36.89\% \\
+E1 (Semi-Tersirat)          & 46 & 52.97\% & 56.52\% \\
+E2 (Tersirat / Kontekstual) & 1 & 100.00\% & 100.00\% \\
+\hline
+\textbf{Total / Rata-rata Global} & \textbf{150} & \textbf{39.46\%} & \textbf{43.33\%} \\
+\hline
+\end{tabular}
+\end{table}
