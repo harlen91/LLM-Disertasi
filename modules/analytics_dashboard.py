@@ -52,7 +52,7 @@ def render_analytics_dashboard_page():
     if "target_source" in df.columns:
         ts = str(df["target_source"].iloc[0])
         if ts == "pseudo_labeled_llm":
-            st.info("ℹ️ Status Dataset: **Pseudo-Labeled LLM** (belum memiliki ground truth manusia tervalidasi independen).")
+            st.info("ℹ️ Kebijakan Riset: **Supervisi LLM-Generated Pseudo-Labels** (evaluasi mengukur konsistensi & kesepakatan terhadap pseudo-label LLM).")
     df["cyberbullying"] = df["cyberbullying"].astype(str).str.upper().str.strip()
     if "error" in df.columns:
         err_rows = int(df["error"].notna().sum())

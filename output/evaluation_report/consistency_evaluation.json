@@ -1,0 +1,159 @@
+{
+  "evaluation_policy": "llm_pseudo_label_consistency_and_reliability",
+  "disclaimer": "Seluruh metrik konsistensi dan kesepakatan mengevaluasi stabilitas internal LLM serta konsistensi guru-murid (LLM vs Hybrid Model) terhadap pseudo-label tanpa Human Ground Truth.",
+  "dataset_sizes": {
+    "full_curated": 49,
+    "test_split": 5
+  },
+  "class_distribution_audit": {
+    "target_cyberbullying": {
+      "counts": {
+        "YES": 38,
+        "NO": 11
+      },
+      "imbalance_ratio": 3.45,
+      "missing_unknown_count": 0
+    },
+    "target_type": {
+      "counts": {
+        "INS": 24,
+        "NONE": 11,
+        "BSH": 10,
+        "SAR": 3,
+        "DIS": 1
+      },
+      "imbalance_ratio": 24.0,
+      "missing_unknown_count": 0
+    },
+    "target_emotion": {
+      "counts": {
+        "MOCK": 30,
+        "NEU": 11,
+        "DIS": 5,
+        "ANG": 3
+      },
+      "imbalance_ratio": 10.0,
+      "missing_unknown_count": 0
+    },
+    "target_cultural_context": {
+      "counts": {
+        "NONE": 25,
+        "APP": 17,
+        "STA": 4,
+        "GEN": 1,
+        "INT": 1,
+        "FAM": 1
+      },
+      "imbalance_ratio": 25.0,
+      "missing_unknown_count": 0
+    },
+    "target_implicit_level": {
+      "counts": {
+        "E0": 28,
+        "E1": 21
+      },
+      "imbalance_ratio": 1.33,
+      "missing_unknown_count": 0
+    },
+    "target_severity": {
+      "counts": {
+        "LOW": 30,
+        "NONE": 11,
+        "MEDIUM": 8
+      },
+      "imbalance_ratio": 3.75,
+      "missing_unknown_count": 0
+    }
+  },
+  "stream_b_cue_family_stats": {
+    "Linguistic": {
+      "mean_activation": 0.1429,
+      "std_activation": 0.3064,
+      "nonzero_rate": 1.0
+    },
+    "Cultural": {
+      "mean_activation": 0.0714,
+      "std_activation": 0.2119,
+      "nonzero_rate": 0.6
+    },
+    "Emotional": {
+      "mean_activation": 0.1571,
+      "std_activation": 0.354,
+      "nonzero_rate": 1.0
+    },
+    "Pragmatic": {
+      "mean_activation": 0.05,
+      "std_activation": 0.1979,
+      "nonzero_rate": 0.4
+    },
+    "Contextual": {
+      "mean_activation": 0.2567,
+      "std_activation": 0.3801,
+      "nonzero_rate": 1.0
+    }
+  },
+  "teacher_student_agreement": {
+    "available": true,
+    "model_architecture": "Hybrid Dual-Stream Gated Fusion (Active Stream A + Stream B)",
+    "mean_gate_weight_z": 0.4941,
+    "head_agreements": {
+      "cyberbullying": {
+        "support": 5,
+        "agreement_rate": 0.8,
+        "cohen_kappa": 0.0
+      },
+      "type": {
+        "support": 5,
+        "agreement_rate": 0.2,
+        "cohen_kappa": 0.0909
+      },
+      "emotion": {
+        "support": 5,
+        "agreement_rate": 0.4,
+        "cohen_kappa": -0.1538
+      },
+      "cultural": {
+        "support": 5,
+        "agreement_rate": 0.2,
+        "cohen_kappa": 0.1304
+      },
+      "implicit": {
+        "support": 5,
+        "agreement_rate": 0.4,
+        "cohen_kappa": 0.2105
+      },
+      "severity": {
+        "support": 5,
+        "agreement_rate": 0.2,
+        "cohen_kappa": 0.0909
+      }
+    }
+  },
+  "error_analysis_by_implicit_level": {
+    "E0": {
+      "count": 3,
+      "false_positives_vs_pseudo_label": 1,
+      "false_negatives_vs_pseudo_label": 0,
+      "agreement_rate": 0.6667,
+      "sample_disagreements": [
+        {
+          "comment": "Kue Koncol",
+          "teacher": "NO",
+          "hybrid": "YES",
+          "hybrid_prob": 0.7711
+        }
+      ]
+    },
+    "E1": {
+      "count": 2,
+      "false_positives_vs_pseudo_label": 0,
+      "false_negatives_vs_pseudo_label": 0,
+      "agreement_rate": 1.0,
+      "sample_disagreements": []
+    }
+  },
+  "llm_repeat_consistency": {
+    "status": "not_run_no_live_engine",
+    "note": "Berikan --run-live-consistency dengan SUMOPOD_API_KEY aktif (atau engine instance) untuk mengukur multi-run kappa & sensitivitas prompt."
+  }
+}

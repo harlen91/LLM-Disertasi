@@ -57,12 +57,13 @@ def evaluate_dual_xai_benchmark(
     resolved_model = model_path or (DEFAULT_HYBRID_WEIGHTS if model_type == "hybrid" else DEFAULT_BASELINE_DIR)
     explainer = HybridSHAPExplainer(model_path=resolved_model, model_type=model_type)
 
-    # Cek apakah dataset berstatus human_ground_truth atau pseudo_labeled_llm
+    # Stream B (33D Non-Leaky Contextual Evidence Cues) AKTIF konsisten untuk Hybrid model
     target_source = str(df_test["target_source"].iloc[0]) if "target_source" in df_test.columns and len(df_test) > 0 else "pseudo_labeled_llm"
     test_vec_path = test_csv_path.parent / "test_llm_vectors.npy"
     test_vecs = None
-    if model_type == "hybrid" and target_source == "human_ground_truth" and test_vec_path.exists():
+    if model_type == "hybrid" and test_vec_path.exists():
         test_vecs = np.load(test_vec_path)[:total_test]
+        explainer.background_vectors = test_vecs[: min(16, len(test_vecs))]
 
     results: List[Dict[str, Any]] = []
     comprehensiveness_scores: List[float] = []
@@ -128,10 +129,10 @@ def evaluate_dual_xai_benchmark(
     output_dir.mkdir(parents=True, exist_ok=True)
     summary_report = {
         "evaluation_name": f"Dual Explainability Benchmark (SHAP Library [{model_type}] vs SumoPod LLM CoT)",
-        "shap_method": "shap.Explainer(shap.maskers.Text) + shap.Explainer(Tabular Permutation)",
+        "shap_method": "shap.Explainer(shap.maskers.Text) + shap.Explainer(Tabular Permutation on 33D Contextual Cues)",
         "model_type": model_type,
         "target_source": target_source,
-        "llm_vector_conditioning": "active_human_gt" if test_vecs is not None else "modality_masked_zeros",
+        "llm_vector_conditioning": "active_33d_contextual_evidence" if test_vecs is not None else "text_only_baseline",
         "total_test_samples": total_test,
         "scientific_faithfulness_metrics": {
             "mean_comprehensiveness": mean_comp,

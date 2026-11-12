@@ -17,7 +17,7 @@
       "special": true
     },
     "2": {
-      "content": "[CLS]",
+      "content": "[MASK]",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -25,7 +25,7 @@
       "special": true
     },
     "3": {
-      "content": "[SEP]",
+      "content": "[CLS]",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -33,7 +33,7 @@
       "special": true
     },
     "4": {
-      "content": "[MASK]",
+      "content": "[SEP]",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,

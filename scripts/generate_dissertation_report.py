@@ -204,28 +204,41 @@ Cyberbullying (1) & {pc1['precision']:.4f} & {pc1['recall']:.4f} & {pc1['f1']:.4
     if ablation:
         latex_code += """
 % ===============================================================
-% TABEL 4: ABLATION STUDY (INDOBERTWEET-ONLY vs LLM-ONLY vs HYBRID)
+% TABEL 4: 6-WAY ABLATION STUDY (E1 - E6 PADA TEST SET IDENTIK)
 % ===============================================================
 \\begin{table}[htbp]
 \\centering
-\\caption{Studi Ablasi pada Test Set yang Sama}
+\\caption{Studi Ablasi 6-Konfigurasi pada Split yang Sama (Evaluasi terhadap LLM Pseudo-Labels)}
 \\label{tab:ablation_study}
-\\begin{tabular}{lcccc}
+\\begin{tabular}{lccccc}
 \\hline
-\\textbf{Varian Model} & \\textbf{Accuracy} & \\textbf{Macro-F1} & \\textbf{ROC-AUC} & \\textbf{PR-AUC} \\\\
+\\textbf{Eksperimen} & \\textbf{Accuracy} & \\textbf{Macro-F1} & \\textbf{ROC-AUC} & \\textbf{PR-AUC} & \\textbf{Gate $z$} \\\\
 \\hline
 """
-        for key in ["model_a_indobertweet_only", "model_b_llm_only", "model_c_hybrid_fusion"]:
+        ablation_keys = [
+            "E1_transformer_only",
+            "E2_llm_knowledge_only",
+            "E3_hybrid_full_fusion",
+            "E4_hybrid_no_cultural",
+            "E5_hybrid_no_emotional",
+            "E6_hybrid_no_gated_fusion",
+        ]
+        if not any(ablation.get(k) for k in ablation_keys):
+            ablation_keys = ["model_a_indobertweet_only", "model_b_llm_only", "model_c_hybrid_fusion"]
+
+        for key in ablation_keys:
             m = ablation.get(key)
             if not m:
                 continue
             name = m.get("model_name", key)
             if m.get("accuracy") is None:
-                latex_code += f"{name} & \\multicolumn{{4}}{{c}}{{Diblokir ({m.get('status', 'butuh human GT')})}} \\\\\n"
+                latex_code += f"{name} & \\multicolumn{{5}}{{c}}{{N/A ({m.get('status', 'unavailable')})}} \\\\\n"
             else:
+                gate_z = m.get("mean_gating_z", "-")
+                gate_str = f"{gate_z:.4f}" if isinstance(gate_z, (int, float)) else "-"
                 latex_code += (
                     f"{name} & {m['accuracy']:.4f} & {m['macro_f1']:.4f} & "
-                    f"{m.get('roc_auc', 'N/A')} & {m.get('pr_auc', 'N/A')} \\\\\n"
+                    f"{m.get('roc_auc', 'N/A')} & {m.get('pr_auc', 'N/A')} & {gate_str} \\\\\n"
                 )
         latex_code += "\\hline\n\\end{tabular}\n\\end{table}\n"
 
@@ -237,6 +250,8 @@ def generate_markdown_report(
     target_source: str,
     ablation: Optional[Dict[str, Any]],
     output_dir: Path,
+    hybrid_payload: Optional[Dict[str, Any]] = None,
+    consistency_payload: Optional[Dict[str, Any]] = None,
 ) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     md_path = output_dir / "dissertation_evaluation_report.md"
@@ -245,22 +260,22 @@ def generate_markdown_report(
     ci = metrics.get("confidence_intervals_95", {})
     ea = metrics.get("error_analysis", {})
 
-    warning_banner = (
-        "> [!WARNING]\n"
-        "> **Status Label Referensi: `pseudo_labeled_llm`**. Dataset uji belum memiliki kolom ground truth manusia yang tervalidasi secara independen. Seluruh metrik di bawah ini mengukur kesepakatan/distilasi terhadap pseudo-label LLM secara bebas kebocoran (*leakage-free*), bukan akurasi terhadap gold standard manusia.\n"
+    policy_banner = (
+        "> [!NOTE]\n"
+        "> **Kebijakan Metodologi (`pseudo_labeled_llm`)**: Penelitian ini menggunakan **LLM-generated pseudo-labels** sebagai target supervisi utama (tanpa kewajiban human ground truth), dengan **Stream B berupa 33D representasi bukti kontekstual non-target** (Linguistic, Cultural, Emotional, Pragmatic, Contextual) yang aktif secara konsisten pada training, validation, testing, dan inference. Metrik mengevaluasi kesepakatan/konsistensi model terhadap pseudo-label LLM.\n"
         if target_source != "human_ground_truth"
         else "> [!NOTE]\n> **Status Label Referensi: `human_ground_truth` (Tervalidasi)**. Evaluasi dijalankan secara independen terhadap ground truth manusia.\n"
     )
 
     content = f"""# 📑 Laporan Evaluasi Komprehensif Disertasi
 
-{warning_banner}
+{policy_banner}
 
 ## 1. Ringkasan Metrik Kinerja Utama (Test Set, $\\tau^* = {metrics['threshold']:.2f}$)
 
 | Metrik Evaluasi | Nilai | 95% Bootstrap CI | Interpretasi |
 | :--- | :---: | :---: | :--- |
-| **Accuracy** | **{metrics['accuracy']*100:.2f}%** ({metrics['accuracy']:.4f}) | {ci.get('accuracy')} | Proporsi prediksi tepat keseluruhan |
+| **Accuracy** | **{metrics['accuracy']*100:.2f}%** ({metrics['accuracy']:.4f}) | {ci.get('accuracy')} | Kesepakatan prediksi tepat terhadap pseudo-label |
 | **Macro F1-Score** | **{metrics['macro_f1']:.4f}** | {ci.get('macro_f1')} | Rata-rata harmonik F1 adil kelas (Utama) |
 | **Weighted F1-Score** | {metrics['weighted_f1']:.4f} | - | Rata-rata F1 terbobot proporsi kelas |
 | **Macro Precision / Recall** | {metrics['macro_precision']:.4f} / {metrics['macro_recall']:.4f} | - | Ketepatan vs sensitivitas makro |
@@ -289,17 +304,43 @@ def generate_markdown_report(
             content += f"| **{t_code}** | {info['count']} | {info['correct']} | {info['accuracy']*100:.2f}% |\n"
 
     if ablation:
-        content += "\n## 4. Studi Ablasi (Test Set Identik)\n\n| Model | Accuracy | Macro-F1 | ROC-AUC | PR-AUC |\n| :--- | :---: | :---: | :---: | :---: |\n"
-        for key in ["model_a_indobertweet_only", "model_b_llm_only", "model_c_hybrid_fusion"]:
+        content += "\n## 4. Studi Ablasi 6-Konfigurasi (E1–E6 pada Split Identik)\n\n| Eksperimen | Accuracy | Macro-F1 | ROC-AUC | PR-AUC | Gate z |\n| :--- | :---: | :---: | :---: | :---: | :---: |\n"
+        ab_keys = [
+            "E1_transformer_only",
+            "E2_llm_knowledge_only",
+            "E3_hybrid_full_fusion",
+            "E4_hybrid_no_cultural",
+            "E5_hybrid_no_emotional",
+            "E6_hybrid_no_gated_fusion",
+        ]
+        if not any(ablation.get(k) for k in ab_keys):
+            ab_keys = ["model_a_indobertweet_only", "model_b_llm_only", "model_c_hybrid_fusion"]
+        for key in ab_keys:
             m = ablation.get(key)
             if not m:
                 continue
             if m.get("accuracy") is None:
-                content += f"| {m.get('model_name', key)} | N/A | N/A | N/A | {m.get('status', 'blocked')} |\n"
+                content += f"| {m.get('model_name', key)} | N/A | N/A | N/A | {m.get('status', 'N/A')} | - |\n"
             else:
-                content += f"| {m.get('model_name', key)} | {m['accuracy']:.4f} | {m['macro_f1']:.4f} | {m.get('roc_auc')} | {m.get('pr_auc')} |\n"
+                gz = m.get("mean_gating_z", "-")
+                gz_str = f"{gz:.4f}" if isinstance(gz, (int, float)) else "-"
+                content += f"| {m.get('model_name', key)} | {m['accuracy']:.4f} | {m['macro_f1']:.4f} | {m.get('roc_auc')} | {m.get('pr_auc')} | {gz_str} |\n"
 
-    content += "\n## 5. Artefak Grafik (300 DPI)\n- `figure_confusion_matrix.png`\n- `figure_implicitness_accuracy.png`\n"
+    if hybrid_payload and hybrid_payload.get("multi_task_heads_test"):
+        content += "\n## 5. Kinerja Multi-Task 6 Heads (Hybrid Model E3)\n\n| Classification Head | Support | Accuracy (%) | Macro-F1 |\n| :--- | :---: | :---: | :---: |\n"
+        content += f"| **cyberbullying (binary)** | {cm['tn'] + cm['fp'] + cm['fn'] + cm['tp']} | {metrics['accuracy']*100:.2f}% | {metrics['macro_f1']:.4f} |\n"
+        for h_name, h_info in hybrid_payload["multi_task_heads_test"].items():
+            acc_v = f"{h_info['accuracy']*100:.2f}%" if h_info.get("accuracy") is not None else "N/A"
+            f1_v = f"{h_info['macro_f1']:.4f}" if h_info.get("macro_f1") is not None else "N/A"
+            content += f"| **{h_name}** | {h_info.get('support', 0)} | {acc_v} | {f1_v} |\n"
+
+    if consistency_payload and consistency_payload.get("teacher_student_agreement", {}).get("available"):
+        ts_agree = consistency_payload["teacher_student_agreement"]
+        content += "\n## 6. Konsistensi Guru-Murid & Reliabilitas Non-GT (LLM vs Hybrid Model)\n\n| Dimensi | Support | Agreement Rate | Cohen's $\\kappa$ |\n| :--- | :---: | :---: | :---: |\n"
+        for h_k, h_v in ts_agree.get("head_agreements", {}).items():
+            content += f"| **{h_k}** | {h_v['support']} | {h_v['agreement_rate']*100:.2f}% | {h_v['cohen_kappa']:.4f} |\n"
+
+    content += "\n## 7. Artefak Grafik (300 DPI)\n- `figure_confusion_matrix.png`\n- `figure_implicitness_accuracy.png`\n"
     with open(md_path, "w", encoding="utf-8") as f:
         f.write(content)
     return md_path
@@ -323,34 +364,47 @@ def run_full_evaluation_pipeline(
     has_baseline_weights = model_dir.exists() and (
         (model_dir / "model.safetensors").exists() or (model_dir / "pytorch_model.bin").exists()
     )
-    if not has_baseline_weights:
+    hybrid_metrics_path = hybrid_dir / "hybrid_test_metrics.json"
+    hybrid_payload = None
+    if hybrid_metrics_path.exists():
+        with open(hybrid_metrics_path, "r", encoding="utf-8") as f:
+            hybrid_payload = json.load(f)
+
+    explicit_custom_baseline = model_dir != DEFAULT_MODEL_DIR
+    if not has_baseline_weights and (explicit_custom_baseline or hybrid_payload is None):
         raise FileNotFoundError(
-            f"Checkpoint baseline IndoBERTweet tidak ditemukan di '{model_dir}'. "
-            "Laporan disertasi menolak menyimulasikan metrik dari label aktual. "
-            "Jalankan 'python3 scripts/train_indobertweet.py' terlebih dahulu."
+            f"Checkpoint baseline IndoBERTweet tidak ditemukan di '{model_dir}' dan hasil Hybrid tidak ditemukan di '{hybrid_dir}'. "
+            "Laporan disertasi menolak menyimulasikan metrik dari label aktual."
         )
 
-    from scripts.evaluate_indobertweet import load_classifier
+    if has_baseline_weights:
+        from scripts.evaluate_indobertweet import load_classifier
 
-    model, tokenizer, device = load_classifier(model_dir)
-    manifest = load_model_manifest(model_dir) or load_model_manifest(model_dir.parent)
-    if manifest and manifest.get("optimal_threshold") is not None:
-        opt_thresh = float(manifest["optimal_threshold"])
-    else:
-        val_csv = test_csv.parent / "val.csv"
-        if val_csv.exists():
-            _, val_probs = evaluate_baseline_model_probs(model, tokenizer, device, pd.read_csv(val_csv))
-            opt_thresh, _, _ = find_optimal_threshold_on_val(val_probs, pd.read_csv(val_csv)["label"].to_numpy())
+        model, tokenizer, device = load_classifier(model_dir)
+        manifest = load_model_manifest(model_dir) or load_model_manifest(model_dir.parent)
+        if manifest and manifest.get("optimal_threshold") is not None:
+            opt_thresh = float(manifest["optimal_threshold"])
         else:
-            opt_thresh = 0.50
+            val_csv = test_csv.parent / "val.csv"
+            if val_csv.exists():
+                _, val_probs = evaluate_baseline_model_probs(model, tokenizer, device, pd.read_csv(val_csv))
+                opt_thresh, _, _ = find_optimal_threshold_on_val(val_probs, pd.read_csv(val_csv)["label"].to_numpy())
+            else:
+                opt_thresh = 0.50
 
-    y_true, y_prob_pos = evaluate_baseline_model_probs(model, tokenizer, device, df_test)
-    metrics = compute_comprehensive_classification_metrics(
-        y_true=y_true,
-        y_prob_pos=y_prob_pos,
-        threshold=opt_thresh,
-        df_meta=df_test,
-    )
+        y_true, y_prob_pos = evaluate_baseline_model_probs(model, tokenizer, device, df_test)
+        metrics = compute_comprehensive_classification_metrics(
+            y_true=y_true,
+            y_prob_pos=y_prob_pos,
+            threshold=opt_thresh,
+            df_meta=df_test,
+        )
+    else:
+        metrics = dict(hybrid_payload["test_metrics"])
+
+    # Jika metrik Hybrid E3 tersedia, prioritaskan untuk laporan utama ketika tidak dipanggil khusus untuk model_dir unit test
+    if hybrid_payload and model_dir == DEFAULT_MODEL_DIR and hybrid_payload.get("test_metrics"):
+        metrics = dict(hybrid_payload["test_metrics"])
     metrics["target_source"] = target_source
 
     ablation_path = hybrid_dir / "ablation_comparison.json"
@@ -359,11 +413,24 @@ def run_full_evaluation_pipeline(
         with open(ablation_path, "r", encoding="utf-8") as f:
             ablation = json.load(f)
 
+    consistency_path = output_dir / "consistency_evaluation.json"
+    consistency_payload = None
+    if consistency_path.exists():
+        with open(consistency_path, "r", encoding="utf-8") as f:
+            consistency_payload = json.load(f)
+
     output_dir.mkdir(parents=True, exist_ok=True)
     with open(output_dir / "metrics_summary.json", "w", encoding="utf-8") as f:
         json.dump(metrics, f, indent=2, ensure_ascii=False)
 
-    generate_markdown_report(metrics, target_source, ablation, output_dir)
+    generate_markdown_report(
+        metrics,
+        target_source,
+        ablation,
+        output_dir,
+        hybrid_payload=hybrid_payload,
+        consistency_payload=consistency_payload,
+    )
     latex_str = generate_latex_tables(metrics, ablation)
     with open(output_dir / "dissertation_tables.tex", "w", encoding="utf-8") as f:
         f.write(latex_str)

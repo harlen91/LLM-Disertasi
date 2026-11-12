@@ -29,7 +29,8 @@ from core.data_understanding import (
     TAXONOMY_VECTOR_MAP,
     TOTAL_VECTOR_DIM,
     clean_and_normalize_social_text,
-    extract_teacher_annotation_features,
+    extract_contextual_evidence_vector,
+    extract_cue_family_summary,
     format_structured_rationale,
 )
 from core.evaluation_metrics import load_model_manifest
@@ -186,6 +187,35 @@ class GatedCrossModalityFusion(nn.Module):
         return h_fused, gate_z
 
 
+class ConcatCrossModalityFusion(nn.Module):
+    """
+    Model Ablasi E6 (Hybrid without Gated Fusion):
+    Menggabungkan h_trans dan h_llm_aligned melalui proyeksi concatenation linear
+    tanpa sigmoid gating adaptif z.
+    """
+
+    def __init__(self, trans_dim: int = 768, llm_dim: int = 128, dropout: float = 0.15):
+        super().__init__()
+        self.align_proj = nn.Sequential(
+            nn.Linear(llm_dim, trans_dim),
+            nn.GELU(),
+            nn.LayerNorm(trans_dim),
+        )
+        self.concat_proj = nn.Sequential(
+            nn.Linear(trans_dim * 2, trans_dim),
+            nn.GELU(),
+            nn.LayerNorm(trans_dim),
+            nn.Dropout(dropout),
+        )
+
+    def forward(self, h_trans: torch.Tensor, h_prob: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        h_llm_aligned = self.align_proj(h_prob)
+        concat_feat = torch.cat([h_trans, h_llm_aligned], dim=-1)
+        h_fused = self.concat_proj(concat_feat)
+        dummy_gate = torch.full((h_trans.size(0), trans_dim_like := h_trans.size(1)), 0.5, device=h_trans.device, dtype=h_trans.dtype)
+        return h_fused, dummy_gate
+
+
 # =============================================================================
 # 3. MODEL UTAMA & MODEL ABLASI STREAM B
 # =============================================================================
@@ -273,12 +303,14 @@ class HybridFusionModel(nn.Module):
         focal_alpha: float = 0.60,
         focal_gamma: float = 2.0,
         classifier_dropout: float = 0.20,
+        fusion_mode: str = "gated",
     ):
         super().__init__()
         self.pretrained_model_name = pretrained_model_name
         self.llm_input_dim = llm_input_dim
         self.llm_hidden_dim = llm_hidden_dim
         self.use_uncertainty_loss = use_uncertainty_loss
+        self.fusion_mode = fusion_mode if fusion_mode in {"gated", "concat"} else "gated"
 
         self.config = AutoConfig.from_pretrained(pretrained_model_name)
         self.transformer = AutoModel.from_pretrained(pretrained_model_name, config=self.config)
@@ -290,11 +322,18 @@ class HybridFusionModel(nn.Module):
             dropout=0.1,
         )
 
-        self.fusion = GatedCrossModalityFusion(
-            trans_dim=self.trans_hidden_dim,
-            llm_dim=llm_hidden_dim,
-            dropout=classifier_dropout,
-        )
+        if self.fusion_mode == "concat":
+            self.fusion: nn.Module = ConcatCrossModalityFusion(
+                trans_dim=self.trans_hidden_dim,
+                llm_dim=llm_hidden_dim,
+                dropout=classifier_dropout,
+            )
+        else:
+            self.fusion = GatedCrossModalityFusion(
+                trans_dim=self.trans_hidden_dim,
+                llm_dim=llm_hidden_dim,
+                dropout=classifier_dropout,
+            )
 
         # 6 Multi-Task Classification Heads
         self.head_binary = nn.Linear(self.trans_hidden_dim, len(TAXONOMY_VECTOR_MAP["cyberbullying"]))
@@ -457,11 +496,14 @@ def load_hybrid_classifier_with_manifest(
         else True
     )
 
+    fusion_mode = "concat" if (isinstance(state_dict, dict) and any(k.startswith("fusion.concat_proj.") for k in state_dict)) else str(hparams.get("fusion_mode", "gated"))
+
     model = HybridFusionModel(
         pretrained_model_name=backbone_name,
         llm_input_dim=llm_input_dim,
         llm_hidden_dim=llm_hidden_dim,
         use_uncertainty_loss=use_uncertainty,
+        fusion_mode=fusion_mode,
     )
     model.load_state_dict(state_dict, strict=True)
     model.to(dev)
@@ -513,11 +555,19 @@ def predict_hybrid_text(
     has_llm_vec = annotation_dict is not None
     if has_llm_vec:
         sanitized = sanitize_annotation_dict(annotation_dict, preserve_missing=True)
-        llm_vec = extract_teacher_annotation_features(sanitized)
+        evidence_input = {
+            "comment": text,
+            "comment_normalized": norm_text,
+            "explanation": sanitized.get("explanation", ""),
+            "confidence": sanitized.get("confidence", None),
+            "contextual_cues": sanitized.get("contextual_cues"),
+        }
+        llm_vec = extract_contextual_evidence_vector(evidence_input, text=text)
         structured_rat = format_structured_rationale(sanitized)
     else:
-        llm_vec = np.zeros(TOTAL_VECTOR_DIM, dtype=np.float32)
+        llm_vec = extract_contextual_evidence_vector({"comment": text, "comment_normalized": norm_text}, text=text)
         structured_rat = ""
+    cue_summary = extract_cue_family_summary(llm_vec)
 
     max_len = int(manifest.get("hyperparameters", {}).get("max_length", 128)) if manifest else 128
     text_mode = (manifest.get("hyperparameters", {}).get("text_input_mode", "text_only")) if manifest else "text_only"
@@ -593,7 +643,11 @@ def predict_hybrid_text(
             ]
         },
         "gate_weight_z": round(gate_z, 4),
-        "llm_modality_active": has_llm_vec,
+        "fusion_mode": getattr(model, "fusion_mode", "gated"),
+        "llm_modality_active": bool(np.any(llm_vec > 0.0)),
+        "has_llm_context": has_llm_vec,
+        "cue_family_summary": cue_summary,
+        "stream_b_vector": [round(float(x), 4) for x in llm_vec.tolist()],
         "latency_ms": latency_ms,
         "structured_rationale": structured_rat,
     }

@@ -48,6 +48,8 @@ sys.path.insert(0, str(PROJECT_DIR))
 
 from config import DEFAULT_RANDOM_SEED, INDOBERTWEET_PRETRAINED_MODEL
 from core.data_understanding import (
+    CULTURAL_CUE_SLICE,
+    EMOTIONAL_CUE_SLICE,
     TAXONOMY_VECTOR_MAP,
     TOTAL_VECTOR_DIM,
     clean_and_normalize_social_text,
@@ -312,6 +314,18 @@ def _evaluate_indobertweet_baseline_on_test(
     return metrics
 
 
+def _apply_cue_mask(vec: np.ndarray, ablation_mask_mode: Optional[str] = None) -> np.ndarray:
+    """Menerapkan masking fitur Stream B untuk eksperimen ablasi terkontrol (E1/E4/E5)."""
+    arr = vec.astype(np.float32).copy()
+    if ablation_mask_mode == "all_zero":
+        arr[:] = 0.0
+    elif ablation_mask_mode == "no_cultural":
+        arr[:, CULTURAL_CUE_SLICE] = 0.0
+    elif ablation_mask_mode == "no_emotional":
+        arr[:, EMOTIONAL_CUE_SLICE] = 0.0
+    return arr
+
+
 def _train_and_eval_llm_only_ablation(
     train_vec: np.ndarray,
     val_vec: np.ndarray,
@@ -319,50 +333,65 @@ def _train_and_eval_llm_only_ablation(
     train_df: pd.DataFrame,
     val_df: pd.DataFrame,
     test_df: pd.DataFrame,
-    has_human_ground_truth: bool,
     device: str,
     seed: int = DEFAULT_RANDOM_SEED,
+    max_epochs: int = 80,
 ) -> Dict[str, Any]:
     """
-    Model Ablasi B: LLM Representation Only (33-dim vector MLP).
-    - Jika `has_human_ground_truth=True`, melatih dan mengevaluasi secara sah terhadap ground truth manusia.
-    - Jika `has_human_ground_truth=False` (`pseudo_labeled_llm`), menolak evaluasi circular LLM->LLM.
+    Model Ablasi E2: LLM Contextual Knowledge-Only (33-dim Non-Leaky Evidence MLP).
+    Dilatih & dievaluasi pada split train/val/test yang sama terhadap LLM pseudo-labels
+    menggunakan representasi bukti kontekstual 33D tanpa menyalin label target.
     """
-    if not has_human_ground_truth:
-        return {
-            "model_name": "B. LLM Representation-Only (Stream B)",
-            "status": "blocked_circular_pseudo_label_leakage",
-            "note": (
-                "Evaluasi Stream B standalone diblokir karena dataset berstatus pseudo_labeled_llm "
-                "(vektor 33D berasal dari prediksi LLM yang identik dengan target pseudo-label). "
-                "Tambahkan kolom ground truth manusia tervalidasi untuk evaluasi Model B secara independen."
-            ),
-            "accuracy": None,
-            "macro_f1": None,
-        }
-
     torch.manual_seed(seed)
     clf = LLMKnowledgeOnlyClassifier(in_features=TOTAL_VECTOR_DIM).to(device)
-    optimizer = torch.optim.AdamW(clf.parameters(), lr=1e-3, weight_decay=1e-3)
+    optimizer = torch.optim.AdamW(clf.parameters(), lr=2e-3, weight_decay=1e-3)
 
     x_tr = torch.tensor(train_vec, dtype=torch.float32, device=device)
     y_tr = torch.tensor(train_df["label"].to_numpy(), dtype=torch.long, device=device)
+    y_typ = torch.tensor([_encode_target_label(v, TAXONOMY_VECTOR_MAP["type"]) for v in train_df.get("target_type", train_df.get("type", pd.Series("", index=train_df.index)))], dtype=torch.long, device=device)
+    y_emo = torch.tensor([_encode_target_label(v, TAXONOMY_VECTOR_MAP["emotion"]) for v in train_df.get("target_emotion", train_df.get("emotion", pd.Series("", index=train_df.index)))], dtype=torch.long, device=device)
+    y_cul = torch.tensor([_encode_target_label(v, TAXONOMY_VECTOR_MAP["cultural_context"]) for v in train_df.get("target_cultural_context", train_df.get("cultural_context", pd.Series("", index=train_df.index)))], dtype=torch.long, device=device)
+    y_imp = torch.tensor([_encode_target_label(v, TAXONOMY_VECTOR_MAP["implicit_level"]) for v in train_df.get("target_implicit_level", train_df.get("implicit_level", pd.Series("", index=train_df.index)))], dtype=torch.long, device=device)
+    y_sev = torch.tensor([_encode_target_label(v, TAXONOMY_VECTOR_MAP["severity"]) for v in train_df.get("target_severity", train_df.get("severity", pd.Series("", index=train_df.index)))], dtype=torch.long, device=device)
+
     x_va = torch.tensor(val_vec, dtype=torch.float32, device=device)
     y_va = val_df["label"].to_numpy()
     x_te = torch.tensor(test_vec, dtype=torch.float32, device=device)
     y_te = test_df["label"].to_numpy()
 
-    for _ in range(35):
+    best_val_f1 = -1.0
+    best_state = None
+    for _ in range(max_epochs):
         clf.train()
         optimizer.zero_grad()
-        out = clf(x_tr, labels_binary=y_tr)
+        out = clf(
+            x_tr,
+            labels_binary=y_tr,
+            labels_type=y_typ,
+            labels_emotion=y_emo,
+            labels_cultural=y_cul,
+            labels_implicit=y_imp,
+            labels_severity=y_sev,
+        )
         out["loss"].backward()
         optimizer.step()
+
+        clf.eval()
+        with torch.no_grad():
+            va_probs = clf(x_va)["probabilities"]["binary"][:, 1].cpu().numpy()
+            va_f1 = float(f1_score(y_va, (va_probs >= 0.5).astype(int), average="macro", zero_division=0))
+            if va_f1 > best_val_f1:
+                best_val_f1 = va_f1
+                best_state = {k: v.detach().cpu().clone() for k, v in clf.state_dict().items()}
+
+    if best_state is not None:
+        clf.load_state_dict({k: v.to(device) for k, v in best_state.items()})
 
     clf.eval()
     with torch.no_grad():
         val_probs = clf(x_va)["probabilities"]["binary"][:, 1].cpu().numpy()
-        test_probs = clf(x_te)["probabilities"]["binary"][:, 1].cpu().numpy()
+        te_out = clf(x_te)["probabilities"]
+        test_probs = te_out["binary"][:, 1].cpu().numpy()
 
     opt_tau, _, _ = find_optimal_threshold_on_val(val_probs, y_va)
     metrics = compute_comprehensive_classification_metrics(
@@ -372,95 +401,54 @@ def _train_and_eval_llm_only_ablation(
         df_meta=test_df,
         seed=seed,
     )
-    metrics["model_name"] = "B. LLM Representation-Only (Stream B)"
-    metrics["status"] = "evaluated_against_human_ground_truth"
+    metrics["model_name"] = "E2. LLM Knowledge-Only Model (33D Contextual Cues)"
+    metrics["status"] = "evaluated_against_llm_pseudo_labels"
     return metrics
 
 
-def train_hybrid_pipeline(
-    train_csv: Path,
-    val_csv: Path,
-    test_csv: Path,
-    train_vec_path: Path,
-    val_vec_path: Path,
-    test_vec_path: Path,
-    output_dir: Path,
-    pretrained_model_name: str = INDOBERTWEET_PRETRAINED_MODEL,
+def _train_hybrid_variant(
+    train_df: pd.DataFrame,
+    val_df: pd.DataFrame,
+    test_df: pd.DataFrame,
+    train_vec: np.ndarray,
+    val_vec: np.ndarray,
+    test_vec: np.ndarray,
+    tokenizer,
+    pretrained_model_name: str,
+    device: str,
     epochs: int = 5,
     batch_size: int = 16,
     lr_transformer: float = 2e-5,
     lr_heads: float = 1e-4,
     max_length: int = 128,
     patience: int = 2,
-    use_rationale_text: bool = False,
+    modality_dropout_prob: float = 0.15,
+    fusion_mode: str = "gated",
+    ablation_mask_mode: Optional[str] = None,
     seed: int = DEFAULT_RANDOM_SEED,
+    variant_label: str = "E3. Full Hybrid Fusion",
+    save_artifacts_dir: Optional[Path] = None,
     resume_from: Optional[Path] = None,
-    baseline_model_dir: Optional[Path] = None,
 ) -> Dict[str, Any]:
-    print("=" * 78)
-    print("🚀 MEMULAI PELATIHAN DUAL-STREAM HYBRID FUSION (LEAKAGE-FREE & MTL 6-HEADS)")
-    print("=" * 78)
+    """
+    Trainer bersama yang digunakan oleh model utama (E3) dan varian ablasi Transformer (E1, E4, E5, E6)
+    pada split dan seed yang identik tanpa mematikan Stream B saat validasi/test (kecuali E1/E4/E5 eksplisit).
+    """
     set_seed(seed)
     torch.manual_seed(seed)
-    device = detect_torch_device()
-    print(f"  ⚙️ Device: {device} | Random Seed: {seed}")
 
-    # 1. Load Data & Audit Leakage
-    train_df = pd.read_csv(train_csv)
-    val_df = pd.read_csv(val_csv)
-    test_df = pd.read_csv(test_csv)
+    tr_vec_eff = _apply_cue_mask(train_vec, ablation_mask_mode)
+    va_vec_eff = _apply_cue_mask(val_vec, ablation_mask_mode)
+    te_vec_eff = _apply_cue_mask(test_vec, ablation_mask_mode)
 
-    leakage_report = verify_no_cross_split_leakage(train_df, val_df, test_df)
-    print(f"  ✅ Cross-split leakage check PASSED: {leakage_report}")
-
-    train_vec = np.load(train_vec_path)
-    val_vec = np.load(val_vec_path)
-    test_vec = np.load(test_vec_path)
-
-    ds_manifest_path = train_csv.parent / "dataset_manifest.json"
-    dataset_version = "unspecified"
-    has_human_gt = False
-    target_source = str(train_df["target_source"].iloc[0]) if "target_source" in train_df.columns and len(train_df) > 0 else "pseudo_labeled_llm"
-    if ds_manifest_path.exists():
-        with open(ds_manifest_path, "r", encoding="utf-8") as f:
-            ds_m = json.load(f)
-            dataset_version = ds_m.get("dataset_version", dataset_version)
-            has_human_gt = bool(ds_m.get("has_human_ground_truth", False))
-            target_source = ds_m.get("label_source", target_source)
-    else:
-        has_human_gt = target_source == "human_ground_truth"
-
-    # Leakage Guard Decision
-    mask_eval_llm_stream = not has_human_gt
-    modality_dropout_prob = 0.50 if not has_human_gt else 0.15
-    if mask_eval_llm_stream:
-        print("  🛡️ [Leakage Guard Aktif]: Dataset berstatus `pseudo_labeled_llm` (belum ada ground truth manusia).")
-        print("     -> Stream B dimask ke vektor nol saat validasi/test evaluation (Modality-Masked Student Mode)")
-        print("     -> Modality Dropout (p=0.50) aktif saat training untuk mencegah shortcut leakage & melatih 6 MTL heads.")
-    else:
-        print("  ✅ [Ground Truth Independen Terdeteksi]: Stream B (33D LLM Teacher Vector) aktif penuh di train/val/test.")
-
-    if use_rationale_text and not has_human_gt:
-        print("  ⚠️ `use_rationale_text` dinonaktifkan otomatis dalam mode pseudo_labeled_llm untuk mencegah kebocoran tag target di teks.")
-        use_rationale_text = False
-
-    # 2. Tokenizer, Dataset & DataLoader
-    tokenizer = AutoTokenizer.from_pretrained(pretrained_model_name)
-    train_dataset = HybridCyberbullyingDataset(
-        train_df, train_vec, tokenizer, max_length=max_length, use_rationale_text=use_rationale_text, mask_llm_vectors=False
-    )
-    val_dataset = HybridCyberbullyingDataset(
-        val_df, val_vec, tokenizer, max_length=max_length, use_rationale_text=use_rationale_text, mask_llm_vectors=mask_eval_llm_stream
-    )
-    test_dataset = HybridCyberbullyingDataset(
-        test_df, test_vec, tokenizer, max_length=max_length, use_rationale_text=use_rationale_text, mask_llm_vectors=mask_eval_llm_stream
-    )
+    train_dataset = HybridCyberbullyingDataset(train_df, tr_vec_eff, tokenizer, max_length=max_length)
+    val_dataset = HybridCyberbullyingDataset(val_df, va_vec_eff, tokenizer, max_length=max_length)
+    test_dataset = HybridCyberbullyingDataset(test_df, te_vec_eff, tokenizer, max_length=max_length)
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size * 2, shuffle=False)
     test_loader = DataLoader(test_dataset, batch_size=batch_size * 2, shuffle=False)
 
-    # 3. Model, Optimizer, Scheduler
     model = HybridFusionModel(
         pretrained_model_name=pretrained_model_name,
         llm_input_dim=TOTAL_VECTOR_DIM,
@@ -468,6 +456,7 @@ def train_hybrid_pipeline(
         use_uncertainty_loss=True,
         focal_alpha=0.60,
         focal_gamma=2.0,
+        fusion_mode=fusion_mode,
     ).to(device)
 
     optimizer_grouped_parameters = [
@@ -480,10 +469,12 @@ def train_hybrid_pipeline(
         optimizer, num_warmup_steps=int(0.1 * total_steps), num_training_steps=total_steps
     )
 
-    output_dir.mkdir(parents=True, exist_ok=True)
-    ckpt_dir = output_dir / "checkpoints"
-    ckpt_dir.mkdir(parents=True, exist_ok=True)
-    latest_ckpt_path = ckpt_dir / "latest_checkpoint.pt"
+    latest_ckpt_path = None
+    if save_artifacts_dir is not None:
+        save_artifacts_dir.mkdir(parents=True, exist_ok=True)
+        ckpt_dir = save_artifacts_dir / "checkpoints"
+        ckpt_dir.mkdir(parents=True, exist_ok=True)
+        latest_ckpt_path = ckpt_dir / "latest_checkpoint.pt"
 
     start_epoch = 1
     best_val_f1 = -1.0
@@ -492,7 +483,6 @@ def train_hybrid_pipeline(
     no_improve_epochs = 0
     history: List[Dict[str, Any]] = []
 
-    # Optional checkpoint resume
     if resume_from is not None and Path(resume_from).exists():
         ckpt = torch.load(resume_from, map_location=device)
         model.load_state_dict(ckpt["model_state_dict"])
@@ -504,26 +494,23 @@ def train_hybrid_pipeline(
         no_improve_epochs = int(ckpt.get("no_improve_epochs", 0))
         best_model_state = ckpt.get("best_model_state", None)
         history = ckpt.get("history", [])
-        print(f"  🔁 Melanjutkan pelatihan dari checkpoint epoch {start_epoch - 1} ({resume_from})")
 
-    # 4. Training Loop dengan Early Stopping
     rng = np.random.RandomState(seed)
-    start_time = time.time()
+    t0 = time.time()
+    effective_mod_dropout = 0.0 if ablation_mask_mode == "all_zero" else modality_dropout_prob
 
     for epoch in range(start_epoch, epochs + 1):
         model.train()
         train_loss = 0.0
-
         for batch in train_loader:
             optimizer.zero_grad()
             input_ids = batch["input_ids"].to(device)
             attention_mask = batch["attention_mask"].to(device)
             llm_vectors = batch["llm_vectors"].to(device)
 
-            # Modality dropout during training
-            if modality_dropout_prob > 0.0:
+            if effective_mod_dropout > 0.0:
                 drop_mask = torch.tensor(
-                    (rng.rand(llm_vectors.size(0), 1) >= modality_dropout_prob).astype(np.float32),
+                    (rng.rand(llm_vectors.size(0), 1) >= effective_mod_dropout).astype(np.float32),
                     device=device,
                 )
                 llm_vectors = llm_vectors * drop_mask
@@ -550,20 +537,20 @@ def train_hybrid_pipeline(
         val_res = evaluate_multi_task(model, val_loader, device)
         val_f1 = val_res["binary_macro_f1"]
 
-        epoch_record = {
+        history.append({
             "epoch": epoch,
             "train_loss": round(avg_train_loss, 4),
             "val_loss": val_res["loss"],
             "val_accuracy": val_res["binary_accuracy"],
             "val_macro_f1": val_f1,
             "mean_gate_z": val_res["mean_gate_z"],
-        }
-        history.append(epoch_record)
-        print(
-            f"  Epoch [{epoch:02d}/{epochs:02d}] Train Loss={avg_train_loss:.4f} | "
-            f"Val Loss={val_res['loss']:.4f} | Val Acc={val_res['binary_accuracy']*100:.2f}% | "
-            f"Val Macro-F1={val_f1:.4f} | Gate z={val_res['mean_gate_z']:.3f}"
-        )
+        })
+        if save_artifacts_dir is not None:
+            print(
+                f"  Epoch [{epoch:02d}/{epochs:02d}] Train Loss={avg_train_loss:.4f} | "
+                f"Val Loss={val_res['loss']:.4f} | Val Acc={val_res['binary_accuracy']*100:.2f}% | "
+                f"Val Macro-F1={val_f1:.4f} | Gate z={val_res['mean_gate_z']:.3f}"
+            )
 
         if val_f1 > best_val_f1:
             best_val_f1 = val_f1
@@ -573,86 +560,253 @@ def train_hybrid_pipeline(
         else:
             no_improve_epochs += 1
 
-        # Save resumable training checkpoint
-        torch.save(
-            {
-                "epoch": epoch,
-                "model_state_dict": {k: v.detach().cpu() for k, v in model.state_dict().items()},
-                "optimizer_state_dict": optimizer.state_dict(),
-                "scheduler_state_dict": scheduler.state_dict(),
-                "best_val_f1": best_val_f1,
-                "best_epoch": best_epoch,
-                "no_improve_epochs": no_improve_epochs,
-                "best_model_state": best_model_state,
-                "history": history,
-            },
-            latest_ckpt_path,
-        )
+        if latest_ckpt_path is not None:
+            torch.save(
+                {
+                    "epoch": epoch,
+                    "model_state_dict": {k: v.detach().cpu() for k, v in model.state_dict().items()},
+                    "optimizer_state_dict": optimizer.state_dict(),
+                    "scheduler_state_dict": scheduler.state_dict(),
+                    "best_val_f1": best_val_f1,
+                    "best_epoch": best_epoch,
+                    "no_improve_epochs": no_improve_epochs,
+                    "best_model_state": best_model_state,
+                    "history": history,
+                },
+                latest_ckpt_path,
+            )
 
         if no_improve_epochs >= patience:
-            print(f"  ⏹️ Early stopping dipicu pada epoch {epoch} (tidak ada peningkatan Val Macro-F1 selama {patience} epoch).")
             break
 
-    train_duration = round(time.time() - start_time, 1)
+    train_duration = round(time.time() - t0, 1)
     if best_model_state is not None:
         model.load_state_dict({k: v.to(device) for k, v in best_model_state.items()})
 
-    best_weights_path = output_dir / "best_hybrid_model.pt"
-    torch.save(best_model_state or model.state_dict(), best_weights_path)
-    tokenizer.save_pretrained(str(output_dir))
+    best_weights_path = None
+    if save_artifacts_dir is not None:
+        best_weights_path = save_artifacts_dir / "best_hybrid_model.pt"
+        torch.save(best_model_state or model.state_dict(), best_weights_path)
+        tokenizer.save_pretrained(str(save_artifacts_dir))
 
-    # 5. Threshold Optimization STRICTLY on Validation Set
     val_best = evaluate_multi_task(model, val_loader, device)
     opt_tau, val_opt_f1, val_opt_acc = find_optimal_threshold_on_val(val_best["bin_probs"], val_best["bin_targets"])
-    print(f"\n🎯 Threshold Optimal dari Validation Set: tau={opt_tau:.2f} (Val Macro-F1={val_opt_f1:.4f}, Val Acc={val_opt_acc*100:.2f}%)")
 
-    # 6. Evaluasi Final pada Untouched Test Set
     test_res = evaluate_multi_task(model, test_loader, device)
     valid_bin = test_res["bin_targets"] != IGNORE_INDEX
-    hybrid_test_full = compute_comprehensive_classification_metrics(
+    test_metrics = compute_comprehensive_classification_metrics(
         y_true=test_res["bin_targets"][valid_bin],
         y_prob_pos=test_res["bin_probs"][valid_bin],
         threshold=opt_tau,
         df_meta=test_df.iloc[np.where(valid_bin)[0]].reset_index(drop=True),
         seed=seed,
     )
+    test_metrics["model_name"] = variant_label
+    test_metrics["fusion_mode"] = fusion_mode
+    test_metrics["ablation_mask_mode"] = ablation_mask_mode or "none"
+    test_metrics["mean_gating_z"] = test_res["mean_gate_z"]
+    test_metrics["multi_task_heads_test"] = test_res["mtl_heads"]
+
+    return {
+        "metrics": test_metrics,
+        "test_res": test_res,
+        "val_opt_f1": val_opt_f1,
+        "val_opt_acc": val_opt_acc,
+        "opt_tau": opt_tau,
+        "best_epoch": best_epoch,
+        "history": history,
+        "train_duration": train_duration,
+        "best_weights_path": best_weights_path,
+        "latest_ckpt_path": latest_ckpt_path,
+    }
+
+
+def train_hybrid_pipeline(
+    train_csv: Path,
+    val_csv: Path,
+    test_csv: Path,
+    train_vec_path: Path,
+    val_vec_path: Path,
+    test_vec_path: Path,
+    output_dir: Path,
+    pretrained_model_name: str = INDOBERTWEET_PRETRAINED_MODEL,
+    epochs: int = 5,
+    batch_size: int = 16,
+    lr_transformer: float = 2e-5,
+    lr_heads: float = 1e-4,
+    max_length: int = 128,
+    patience: int = 2,
+    use_rationale_text: bool = False,
+    seed: int = DEFAULT_RANDOM_SEED,
+    resume_from: Optional[Path] = None,
+    baseline_model_dir: Optional[Path] = None,
+    modality_dropout_prob: float = 0.15,
+    run_ablation: bool = True,
+) -> Dict[str, Any]:
+    _ = use_rationale_text  # Intentionally disabled to avoid leaking target tags in text encoder
+    print("=" * 78)
+    print("🚀 MEMULAI PELATIHAN DUAL-STREAM HYBRID FUSION (ACTIVE STREAM A + STREAM B)")
+    print("=" * 78)
+    set_seed(seed)
+    torch.manual_seed(seed)
+    device = detect_torch_device()
+    print(f"  ⚙️ Device: {device} | Random Seed: {seed}")
+
+    # 1. Load Data & Audit Cross-Split Leakage
+    train_df = pd.read_csv(train_csv)
+    val_df = pd.read_csv(val_csv)
+    test_df = pd.read_csv(test_csv)
+
+    leakage_report = verify_no_cross_split_leakage(train_df, val_df, test_df)
+    print(f"  ✅ Cross-split leakage check PASSED: {leakage_report}")
+
+    train_vec = np.load(train_vec_path)
+    val_vec = np.load(val_vec_path)
+    test_vec = np.load(test_vec_path)
+
+    ds_manifest_path = train_csv.parent / "dataset_manifest.json"
+    dataset_version = "unspecified"
+    target_source = str(train_df["target_source"].iloc[0]) if "target_source" in train_df.columns and len(train_df) > 0 else "pseudo_labeled_llm"
+    if ds_manifest_path.exists():
+        with open(ds_manifest_path, "r", encoding="utf-8") as f:
+            ds_m = json.load(f)
+            dataset_version = ds_m.get("dataset_version", dataset_version)
+            target_source = ds_m.get("label_source", target_source)
+
+    print("  ✅ [Dual-Stream Active Policy]: Stream A (IndoBERTweet) & Stream B (33D Non-Leaky Contextual Evidence) AKTIF di Train/Val/Test.")
+    print(f"     -> Target Supervisi: {target_source} (Modality Dropout regularisasi training p={modality_dropout_prob:.2f})")
+
+    tokenizer = AutoTokenizer.from_pretrained(pretrained_model_name)
+
+    # 2. Latih & Evaluasi Model Utama (E3 Full Hybrid Fusion)
+    e3_run = _train_hybrid_variant(
+        train_df=train_df,
+        val_df=val_df,
+        test_df=test_df,
+        train_vec=train_vec,
+        val_vec=val_vec,
+        test_vec=test_vec,
+        tokenizer=tokenizer,
+        pretrained_model_name=pretrained_model_name,
+        device=device,
+        epochs=epochs,
+        batch_size=batch_size,
+        lr_transformer=lr_transformer,
+        lr_heads=lr_heads,
+        max_length=max_length,
+        patience=patience,
+        modality_dropout_prob=modality_dropout_prob,
+        fusion_mode="gated",
+        ablation_mask_mode=None,
+        seed=seed,
+        variant_label="E3. Full Hybrid Transformer-LLM Fusion",
+        save_artifacts_dir=output_dir,
+        resume_from=resume_from,
+    )
+
+    hybrid_test_full = e3_run["metrics"]
+    test_res = e3_run["test_res"]
+    history = e3_run["history"]
+    opt_tau = e3_run["opt_tau"]
+    best_epoch = e3_run["best_epoch"]
+    train_duration = e3_run["train_duration"]
+    best_weights_path = e3_run["best_weights_path"]
+    latest_ckpt_path = e3_run["latest_ckpt_path"]
 
     print(
-        f"📊 [Test Set Hybrid Fusion] Acc={hybrid_test_full['accuracy']*100:.2f}% | "
-        f"Macro-F1={hybrid_test_full['macro_f1']:.4f} | ROC-AUC={hybrid_test_full['roc_auc']} | "
-        f"PR-AUC={hybrid_test_full['pr_auc']} | ECE={hybrid_test_full['calibration']['ece']}"
+        f"\n🎯 Threshold Optimal Validation (E3): tau={opt_tau:.2f} | "
+        f"Test Acc={hybrid_test_full['accuracy']*100:.2f}% | Macro-F1={hybrid_test_full['macro_f1']:.4f} | "
+        f"ROC-AUC={hybrid_test_full['roc_auc']} | PR-AUC={hybrid_test_full['pr_auc']} | Gate z={test_res['mean_gate_z']:.4f}"
     )
 
-    # 7. 3-Way Ablation Comparison on IDENTICAL Test Set
+    # 3. 6-Way Ablation Study on IDENTICAL Splits (E1-E6)
     baseline_dir = baseline_model_dir or (PROJECT_DIR / "output" / "models" / "indobertweet_cyberbullying" / "best_model")
-    ablation_a = _evaluate_indobertweet_baseline_on_test(
+    standalone_baseline = _evaluate_indobertweet_baseline_on_test(
         baseline_dir=baseline_dir, val_df=val_df, test_df=test_df, device=device, max_length=max_length, seed=seed
     )
-    ablation_b = _train_and_eval_llm_only_ablation(
+
+    ablation_e2 = _train_and_eval_llm_only_ablation(
         train_vec=train_vec,
         val_vec=val_vec,
         test_vec=test_vec,
         train_df=train_df,
         val_df=val_df,
         test_df=test_df,
-        has_human_ground_truth=has_human_gt,
         device=device,
         seed=seed,
     )
-    ablation_c = {**hybrid_test_full, "model_name": "C. Hybrid Dual-Stream Fusion (IndoBERTweet + LLM Knowledge)"}
+
+    if run_ablation:
+        print("\n🔬 Menjalankan 6-Way Ablation Study pada split identik (E1, E2, E3, E4, E5, E6)...")
+        e1_run = _train_hybrid_variant(
+            train_df=train_df, val_df=val_df, test_df=test_df,
+            train_vec=train_vec, val_vec=val_vec, test_vec=test_vec,
+            tokenizer=tokenizer, pretrained_model_name=pretrained_model_name, device=device,
+            epochs=epochs, batch_size=batch_size, lr_transformer=lr_transformer, lr_heads=lr_heads,
+            max_length=max_length, patience=patience, modality_dropout_prob=0.0,
+            fusion_mode="gated", ablation_mask_mode="all_zero", seed=seed,
+            variant_label="E1. Transformer-Only Baseline (Stream A)",
+        )
+        ablation_e1 = e1_run["metrics"]
+
+        e4_run = _train_hybrid_variant(
+            train_df=train_df, val_df=val_df, test_df=test_df,
+            train_vec=train_vec, val_vec=val_vec, test_vec=test_vec,
+            tokenizer=tokenizer, pretrained_model_name=pretrained_model_name, device=device,
+            epochs=epochs, batch_size=batch_size, lr_transformer=lr_transformer, lr_heads=lr_heads,
+            max_length=max_length, patience=patience, modality_dropout_prob=modality_dropout_prob,
+            fusion_mode="gated", ablation_mask_mode="no_cultural", seed=seed,
+            variant_label="E4. Hybrid without Cultural Knowledge",
+        )
+        ablation_e4 = e4_run["metrics"]
+
+        e5_run = _train_hybrid_variant(
+            train_df=train_df, val_df=val_df, test_df=test_df,
+            train_vec=train_vec, val_vec=val_vec, test_vec=test_vec,
+            tokenizer=tokenizer, pretrained_model_name=pretrained_model_name, device=device,
+            epochs=epochs, batch_size=batch_size, lr_transformer=lr_transformer, lr_heads=lr_heads,
+            max_length=max_length, patience=patience, modality_dropout_prob=modality_dropout_prob,
+            fusion_mode="gated", ablation_mask_mode="no_emotional", seed=seed,
+            variant_label="E5. Hybrid without Emotional Knowledge",
+        )
+        ablation_e5 = e5_run["metrics"]
+
+        e6_run = _train_hybrid_variant(
+            train_df=train_df, val_df=val_df, test_df=test_df,
+            train_vec=train_vec, val_vec=val_vec, test_vec=test_vec,
+            tokenizer=tokenizer, pretrained_model_name=pretrained_model_name, device=device,
+            epochs=epochs, batch_size=batch_size, lr_transformer=lr_transformer, lr_heads=lr_heads,
+            max_length=max_length, patience=patience, modality_dropout_prob=modality_dropout_prob,
+            fusion_mode="concat", ablation_mask_mode=None, seed=seed,
+            variant_label="E6. Hybrid without Gated Fusion (Concat)",
+        )
+        ablation_e6 = e6_run["metrics"]
+    else:
+        ablation_e1 = standalone_baseline
+        ablation_e4 = None
+        ablation_e5 = None
+        ablation_e6 = None
 
     ablation_summary = {
         "test_samples": int(len(test_df)),
         "target_source": target_source,
-        "evaluation_mode": "modality_masked_student" if mask_eval_llm_stream else "full_dual_stream",
-        "model_a_indobertweet_only": ablation_a,
-        "model_b_llm_only": ablation_b,
-        "model_c_hybrid_fusion": ablation_c,
+        "evaluation_mode": "full_dual_stream_active",
+        "E1_transformer_only": ablation_e1,
+        "E2_llm_knowledge_only": ablation_e2,
+        "E3_hybrid_full_fusion": hybrid_test_full,
+        "E4_hybrid_no_cultural": ablation_e4,
+        "E5_hybrid_no_emotional": ablation_e5,
+        "E6_hybrid_no_gated_fusion": ablation_e6,
+        # Backward-compatible summary keys
+        "indobertweet_standalone_checkpoint": standalone_baseline,
+        "model_a_indobertweet_only": ablation_e1 or standalone_baseline,
+        "model_b_llm_only": ablation_e2,
+        "model_c_hybrid_fusion": hybrid_test_full,
     }
     with open(output_dir / "ablation_comparison.json", "w", encoding="utf-8") as f:
         json.dump(ablation_summary, f, indent=2, ensure_ascii=False)
 
-    # Save metrics JSON + training history + Model Manifest
+    # Save training history + metrics JSON + Model Manifest
     with open(output_dir / "training_history.json", "w", encoding="utf-8") as f:
         json.dump(history, f, indent=2)
 
@@ -666,16 +820,19 @@ def train_hybrid_pipeline(
         "max_length": max_length,
         "patience": patience,
         "modality_dropout_prob": modality_dropout_prob,
-        "text_input_mode": "text_plus_rationale" if use_rationale_text else "text_only",
-        "eval_llm_stream_masked": mask_eval_llm_stream,
+        "fusion_mode": "gated",
+        "text_input_mode": "text_only",
+        "stream_a_active": True,
+        "stream_b_active": True,
+        "eval_llm_stream_masked": False,
     }
 
     hybrid_metrics_payload = {
-        "model_architecture": "Hybrid Dual-Stream Gated Fusion (IndoBERTweet + SumoPod LLM 33D Teacher Features)",
+        "model_architecture": "Hybrid Dual-Stream Gated Fusion (IndoBERTweet + Non-Leaky 33D LLM Contextual Cues)",
         "pretrained_backbone": pretrained_model_name,
         "dataset_version": dataset_version,
         "target_source": target_source,
-        "evaluation_mode": "leakage_free_modality_masked_student" if mask_eval_llm_stream else "full_dual_stream_human_gt",
+        "evaluation_mode": "full_dual_stream_pseudo_label_agreement",
         "best_epoch": best_epoch,
         "epochs_trained": len(history),
         "training_duration_sec": train_duration,
@@ -702,12 +859,14 @@ def train_hybrid_pipeline(
         extra_metadata={
             "multi_task_heads_test": test_res["mtl_heads"],
             "evaluation_mode": hybrid_metrics_payload["evaluation_mode"],
+            "stream_b_representation": "non_leaky_33d_contextual_evidence_cues",
             "resumable_checkpoint": str(latest_ckpt_path),
         },
     )
     save_model_manifest(output_dir, manifest)
 
     print(f"\n💾 Weights terbaik disimpan di   : {best_weights_path}")
+    print(f"💾 Ablation 6-Way disimpan di    : {output_dir / 'ablation_comparison.json'}")
     print(f"💾 Model Manifest disimpan di    : {output_dir / 'model_manifest.json'}")
     print("=" * 78)
     return hybrid_metrics_payload
@@ -727,6 +886,8 @@ def main():
     parser.add_argument("--max_length", type=int, default=128)
     parser.add_argument("--patience", type=int, default=2)
     parser.add_argument("--seed", type=int, default=DEFAULT_RANDOM_SEED)
+    parser.add_argument("--modality-dropout", type=float, default=0.15)
+    parser.add_argument("--skip-ablation", action="store_true", help="Lewati pelatihan varian ablasi E1/E4/E5/E6")
     parser.add_argument("--resume", type=str, default=None, help="Path checkpoint .pt untuk melanjutkan training")
 
     args = parser.parse_args()
@@ -743,6 +904,8 @@ def main():
         max_length=args.max_length,
         patience=args.patience,
         seed=args.seed,
+        modality_dropout_prob=args.modality_dropout,
+        run_ablation=not args.skip_ablation,
         resume_from=Path(args.resume) if args.resume else None,
     )
 

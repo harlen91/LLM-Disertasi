@@ -24,9 +24,11 @@ import shap
 
 from config import FINAL_DIR, INDOBERTWEET_PRETRAINED_MODEL, MODELS_DIR
 from core.data_understanding import (
+    CUE_FAMILY_SLICES,
     TOTAL_VECTOR_DIM,
     clean_and_normalize_social_text,
-    extract_teacher_annotation_features,
+    extract_contextual_evidence_vector,
+    extract_cue_family_summary,
     get_teacher_feature_names,
 )
 from core.fusion_model import (
@@ -360,30 +362,66 @@ class HybridSHAPExplainer:
         top_pos = sorted([x for x in feat_items if x["shap_value"] > 0], key=lambda x: x["shap_value"], reverse=True)[:top_k]
         top_neg = sorted([x for x in feat_items if x["shap_value"] < 0], key=lambda x: x["shap_value"])[:top_k]
 
+        vals_arr = np.asarray(vals, dtype=float)
+        cue_family_shap = {
+            family: {
+                "signed_shap_sum": round(float(np.sum(vals_arr[slc])), 4),
+                "mean_abs_shap": round(float(np.mean(np.abs(vals_arr[slc]))), 4),
+            }
+            for family, slc in CUE_FAMILY_SLICES.items()
+        }
+
         return {
             "available": True,
             "method": "shap.Explainer (Numeric Tabular Permutation)",
-            "conditional_scope": "Conditional Shapley values pada Stream B (33D LLM teacher features) dengan teks Stream A ditahan tetap.",
+            "conditional_scope": "Conditional Shapley values pada Stream B (33D Non-Leaky LLM Contextual Evidence Cues) dengan teks Stream A ditahan tetap.",
             "feature_names": feature_names,
             "shap_values": [round(float(v), 4) for v in vals],
+            "cue_family_shap": cue_family_shap,
             "base_value": round(base_val, 4),
             "top_positive_features": top_pos,
             "top_negative_features": top_neg,
+        }
+
+    def _compute_cross_modal_gate(self, text: str, llm_vector: np.ndarray) -> Dict[str, Any]:
+        """Menghitung rasio kontribusi lintas-modalitas langsung dari Gated Cross-Modality Fusion (z vs 1-z)."""
+        if not self.is_hybrid:
+            return {"available": False}
+        norm_text = clean_and_normalize_social_text(text or "")
+        enc = self.tokenizer(
+            [norm_text],
+            padding=True,
+            truncation=True,
+            max_length=self.max_length,
+            return_tensors="pt",
+        ).to(self.device)
+        vec_t = torch.tensor(llm_vector, dtype=torch.float32, device=self.device).reshape(1, TOTAL_VECTOR_DIM)
+        with torch.no_grad():
+            out = self.model(input_ids=enc["input_ids"], attention_mask=enc["attention_mask"], llm_vectors=vec_t)
+        gate_z = float(out["gate_mean_weight"][0].detach().cpu().item())
+        return {
+            "available": True,
+            "transformer_gate_z": round(gate_z, 4),
+            "llm_knowledge_share": round(1.0 - gate_z, 4),
+            "cue_family_activation": extract_cue_family_summary(llm_vector),
         }
 
     def explain_dual_modalities(
         self,
         text: str,
         annotation_dict: Optional[Dict[str, Any]] = None,
+        llm_vector: Optional[np.ndarray] = None,
         max_evals_text: int = 120,
         max_evals_vec: int = 160,
     ) -> Dict[str, Any]:
-        """Menghasilkan penjelasan SHAP terpisah untuk Stream A (Teks) dan Stream B (LLM 33D)."""
-        llm_vec = (
-            extract_teacher_annotation_features(annotation_dict)
-            if annotation_dict is not None
-            else None
-        )
+        """Menghasilkan penjelasan SHAP terpisah untuk Stream A (Teks) dan Stream B (33D Contextual Cues)."""
+        if llm_vector is not None:
+            llm_vec = np.asarray(llm_vector, dtype=np.float32).reshape(-1)
+        elif annotation_dict is not None:
+            llm_vec = extract_contextual_evidence_vector(annotation_dict, text=text)
+        else:
+            llm_vec = extract_contextual_evidence_vector({"comment": text}, text=text)
+
         textual_res = self.explain_text(
             text=text,
             llm_vector=llm_vec,
@@ -391,13 +429,15 @@ class HybridSHAPExplainer:
         )
         numeric_res = (
             self.explain_llm_features(text=text, llm_vector=llm_vec, max_evals=max_evals_vec)
-            if (self.is_hybrid and llm_vec is not None)
-            else {"available": False, "reason": "Vector LLM tidak disediakan atau model bukan Hybrid."}
+            if self.is_hybrid
+            else {"available": False, "reason": "Hanya tersedia pada HybridFusionModel."}
         )
+        cross_modal = self._compute_cross_modal_gate(text=text, llm_vector=llm_vec)
         return {
             "textual_shap": textual_res,
             "llm_vector_shap": numeric_res,
-            "modality_separation_note": "Atribusi token teks dan fitur numerik LLM dilaporkan secara terpisah tanpa penggabungan skalar langsung.",
+            "cross_modal_contribution": cross_modal,
+            "modality_separation_note": "Atribusi token teks (Stream A) dan 33D bukti kontekstual LLM (Stream B) diukur konsisten dengan kedua modalitas aktif serta dianalisis kontribusi gate z vs (1-z).",
         }
 
     def compute_global_importance(
@@ -428,6 +468,7 @@ class HybridSHAPExplainer:
         )[:top_k]
 
         global_llm_features: List[Dict[str, Any]] = []
+        global_cue_families: Dict[str, float] = {}
         if self.is_hybrid and llm_vectors is not None and len(llm_vectors) > 0:
             sub_vecs = np.asarray(llm_vectors[: min(max_samples, len(llm_vectors))], dtype=np.float32)
             all_feat_abs = []
@@ -443,11 +484,16 @@ class HybridSHAPExplainer:
                     key=lambda x: x["mean_abs_shap"],
                     reverse=True,
                 )[:top_k]
+                global_cue_families = {
+                    fam: round(float(np.mean(mean_abs[slc])), 4)
+                    for fam, slc in CUE_FAMILY_SLICES.items()
+                }
 
         return {
             "sample_count": len(sub_texts),
             "top_global_tokens": global_tokens,
             "top_global_llm_features": global_llm_features,
+            "global_cue_families": global_cue_families,
         }
 
 

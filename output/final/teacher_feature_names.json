@@ -1,128 +1,112 @@
 {
   "feature_names": [
-    "teacher_cyberbullying_NO",
-    "teacher_cyberbullying_YES",
-    "teacher_type_INS",
-    "teacher_type_BSH",
-    "teacher_type_SHM",
-    "teacher_type_SAR",
-    "teacher_type_THR",
-    "teacher_type_DIS",
-    "teacher_type_SEX",
-    "teacher_type_EXC",
-    "teacher_type_NONE",
-    "teacher_emotion_ANG",
-    "teacher_emotion_DIS",
-    "teacher_emotion_HUM",
-    "teacher_emotion_MOCK",
-    "teacher_emotion_SAD",
-    "teacher_emotion_NEU",
-    "teacher_cultural_context_APP",
-    "teacher_cultural_context_INT",
-    "teacher_cultural_context_STA",
-    "teacher_cultural_context_FAM",
-    "teacher_cultural_context_EDU",
-    "teacher_cultural_context_REG",
-    "teacher_cultural_context_GEN",
-    "teacher_cultural_context_NONE",
-    "teacher_implicit_level_E0",
-    "teacher_implicit_level_E1",
-    "teacher_implicit_level_E2",
-    "teacher_severity_LOW",
-    "teacher_severity_MEDIUM",
-    "teacher_severity_HIGH",
-    "teacher_severity_NONE",
-    "teacher_confidence_score"
+    "ling_derogatory_lexical",
+    "ling_metaphor_simile",
+    "ling_rhetorical_punct",
+    "ling_elongation_emphasis",
+    "ling_slang_register",
+    "ling_second_person_target",
+    "ling_negation_litotes",
+    "cult_regional_dialect_cue",
+    "cult_appearance_norm_cue",
+    "cult_competence_norm_cue",
+    "cult_status_hierarchy_cue",
+    "cult_family_kinship_cue",
+    "cult_education_norm_cue",
+    "cult_gender_identity_cue",
+    "emo_hostility_aggression",
+    "emo_derision_ridicule",
+    "emo_disgust_contempt",
+    "emo_humiliation_shaming",
+    "emo_sadness_distress",
+    "emo_calm_neutral_register",
+    "emo_sarcastic_emoji_affect",
+    "prag_irony_sarcasm_signal",
+    "prag_presupposition_insinuation",
+    "prag_indirect_advice_framing",
+    "prag_hyperbole_exaggeration",
+    "prag_imperative_attack",
+    "prag_benign_supportive",
+    "ctx_direct_addressee_target",
+    "ctx_public_platform_stage",
+    "ctx_evaluative_judgment",
+    "ctx_harm_impact_evidence",
+    "ctx_provocation_reply",
+    "ctx_teacher_confidence_raw"
   ],
   "schema": [
     {
       "dim_start": 0,
-      "dim_end": 2,
-      "task": "cyberbullying",
-      "classes": [
-        "NO",
-        "YES"
+      "dim_end": 7,
+      "family": "Linguistic",
+      "features": [
+        "ling_derogatory_lexical",
+        "ling_metaphor_simile",
+        "ling_rhetorical_punct",
+        "ling_elongation_emphasis",
+        "ling_slang_register",
+        "ling_second_person_target",
+        "ling_negation_litotes"
       ],
-      "origin": "LLM teacher binary prediction (or actual logprobs if provided)"
+      "origin": "Surface lexical/morphological/rhetorical text markers + LLM contextual_cues.linguistic + CoT rationale lexical evidence"
     },
     {
-      "dim_start": 2,
-      "dim_end": 11,
-      "task": "type",
-      "classes": [
-        "INS",
-        "BSH",
-        "SHM",
-        "SAR",
-        "THR",
-        "DIS",
-        "SEX",
-        "EXC",
-        "NONE"
+      "dim_start": 7,
+      "dim_end": 14,
+      "family": "Cultural",
+      "features": [
+        "cult_regional_dialect_cue",
+        "cult_appearance_norm_cue",
+        "cult_competence_norm_cue",
+        "cult_status_hierarchy_cue",
+        "cult_family_kinship_cue",
+        "cult_education_norm_cue",
+        "cult_gender_identity_cue"
       ],
-      "origin": "LLM teacher bullying type prediction (or actual logprobs if provided)"
+      "origin": "Indonesian regional dialect lexicon + LLM contextual_cues.cultural + CoT cultural norm evidence (zero copy of target cultural_context)"
     },
     {
-      "dim_start": 11,
-      "dim_end": 17,
-      "task": "emotion",
-      "classes": [
-        "ANG",
-        "DIS",
-        "HUM",
-        "MOCK",
-        "SAD",
-        "NEU"
+      "dim_start": 14,
+      "dim_end": 21,
+      "family": "Emotional",
+      "features": [
+        "emo_hostility_aggression",
+        "emo_derision_ridicule",
+        "emo_disgust_contempt",
+        "emo_humiliation_shaming",
+        "emo_sadness_distress",
+        "emo_calm_neutral_register",
+        "emo_sarcastic_emoji_affect"
       ],
-      "origin": "LLM teacher emotion prediction (or actual logprobs if provided)"
+      "origin": "Emoji affective polarity + LLM contextual_cues.emotional + CoT affective tone evidence (zero copy of target emotion)"
     },
     {
-      "dim_start": 17,
-      "dim_end": 25,
-      "task": "cultural_context",
-      "classes": [
-        "APP",
-        "INT",
-        "STA",
-        "FAM",
-        "EDU",
-        "REG",
-        "GEN",
-        "NONE"
+      "dim_start": 21,
+      "dim_end": 27,
+      "family": "Pragmatic",
+      "features": [
+        "prag_irony_sarcasm_signal",
+        "prag_presupposition_insinuation",
+        "prag_indirect_advice_framing",
+        "prag_hyperbole_exaggeration",
+        "prag_imperative_attack",
+        "prag_benign_supportive"
       ],
-      "origin": "LLM teacher cultural context prediction (or actual logprobs if provided)"
+      "origin": "Illocutionary/pragmatic framing cues + LLM contextual_cues.pragmatic + CoT pragmatic speech-act evidence"
     },
     {
-      "dim_start": 25,
-      "dim_end": 28,
-      "task": "implicit_level",
-      "classes": [
-        "E0",
-        "E1",
-        "E2"
-      ],
-      "origin": "LLM teacher implicitness level prediction (or actual logprobs if provided)"
-    },
-    {
-      "dim_start": 28,
-      "dim_end": 32,
-      "task": "severity",
-      "classes": [
-        "LOW",
-        "MEDIUM",
-        "HIGH",
-        "NONE"
-      ],
-      "origin": "LLM teacher severity prediction (or actual logprobs if provided)"
-    },
-    {
-      "dim_start": 32,
+      "dim_start": 27,
       "dim_end": 33,
-      "task": "confidence",
-      "classes": [
-        "scalar_confidence"
+      "family": "Contextual",
+      "features": [
+        "ctx_direct_addressee_target",
+        "ctx_public_platform_stage",
+        "ctx_evaluative_judgment",
+        "ctx_harm_impact_evidence",
+        "ctx_provocation_reply",
+        "ctx_teacher_confidence_raw"
       ],
-      "origin": "LLM self-reported decimal confidence scalar in [0.0, 1.0] (0.0 if missing)"
+      "origin": "Target-addressee/platform discourse markers + LLM CoT harm evidence + uncalibrated scalar confidence [0,1]"
     }
   ]
 }

@@ -3,7 +3,7 @@
 Sistem Penelitian Disertasi Doktoral untuk **Deteksi Cyberbullying Bahasa Indonesia Berbasis Dual-Stream Hybrid Fusion (IndoBERTweet + SumoPod LLM AI Gateway)**, Distilasi Pengetahuan Taksonomi 6-Dimensi, dan Kerangka Kerja **Dual-Modality Explainable AI (Real SHAP + Chain-of-Thought Rationale)**.
 
 > [!NOTE]
-> **Prinsip Integritas Metodologis (v2.0.0)**: Seluruh pipeline memisahkan secara ketat antara **Ground Truth Manusia Tervalidasi (`human_ground_truth`)**, **Pseudo-Label Anotasi LLM (`pseudo_labeled_llm`)**, dan **Teacher Annotation Features 33-Dimensi**. Evaluasi pada dataset `pseudo_labeled_llm` secara otomatis mengaktifkan **Modality-Masked Student Mode** (*Modality Dropout* saat training, Stream-B dimask saat validasi/uji) untuk menjamin nihilnya kebocoran target (*zero target leakage*).
+> **Kebijakan Metodologi Riset (`pseudo_labeled_llm`, v3.0)**: Penelitian ini menggunakan **LLM-generated pseudo-labels** sebagai target supervisi utama (tanpa kewajiban human ground truth). Untuk menjaga integritas Dual-Stream Hybrid Fusion tanpa kebocoran target (*zero target copy*), **Stream B** direkonstruksi menjadi **33D Non-Leaky Contextual Evidence Cues** (Linguistic, Cultural, Emotional, Pragmatic, Contextual) sehingga **Stream A + Stream B aktif secara konsisten pada training, validation, testing, dan live inference**.
 
 ---
 
@@ -14,7 +14,7 @@ Sistem Penelitian Disertasi Doktoral untuk **Deteksi Cyberbullying Bahasa Indone
 ```mermaid
 flowchart LR
     T["Komentar Medsos + Normalisasi Slang/Emoji"] --> SA["Stream A: IndoBERTweet Encoder (768D CLS)"]
-    A["SumoPod LLM API (DeepSeek-V3 CoT + Logprobs/Confidence)"] --> FE["Ekstraksi 33D Teacher Features"]
+    A["SumoPod LLM API (CoT + contextual_cues)"] --> FE["Ekstraksi 33D Non-Leaky Contextual Evidence"]
     FE --> SB["Stream B: KnowledgeProjection (33D -> 128D -> 768D)"]
     SA --> GF["Gated Cross-Modality Fusion: z * h_trans + (1-z) * h_llm"]
     SB --> GF
@@ -30,44 +30,38 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    D["Dataset Mentah CSV/XLSX"] --> L["Batch / Single Annotation (SumoPod AI Gateway)"]
-    L --> C["Kurasi & Audit Kualitas (scripts/curate_dataset.py)"]
-    C --> G{"Ada Kolom Human GT Tervalidasi?"}
-    G -- Tidak --> P["Mode pseudo_labeled_llm (Modality-Masked Student Eval)"]
-    G -- Ya --> H["Mode human_ground_truth (Full Dual-Stream Eval)"]
-    P --> S["Stratified Split 80/10/10 + Verifikasi Zero Cross-Split Leakage"]
-    H --> S
+    D["Dataset Mentah CSV/XLSX"] --> L["Batch / Single Annotation (SumoPod AI Gateway, iicd-v3.0-sumopod)"]
+    L --> C["Kurasi, Audit Kualitas & Log Gagal (scripts/curate_dataset.py)"]
+    C --> V["Ekstraksi 33D Contextual Cues Non-Leaky + Pemisahan Pseudo-Label"]
+    V --> S["Stratified / Group-Aware Split 80/10/10 + Verifikasi Zero Cross-Split Leakage"]
     S --> TB["Train Baseline IndoBERTweet + Val Threshold Tuning"]
-    S --> TH["Train Hybrid Fusion 6-Head MTL + Val Threshold Tuning"]
-    TB --> EV["Evaluasi Komprehensif & Ablasi 3-Arah (Test Set)"]
-    TH --> EV
-    TH --> XAI["Real SHAP Dual-Modality + Faithfulness Comprehensiveness"]
-    EV --> RPT["Laporan Bab 4, Tabel LaTeX & Grafik 300 DPI"]
+    S --> TH["Train Hybrid Fusion + 6-Way Ablation E1-E6 (Active Stream A + Stream B)"]
+    TH --> XAI["Real SHAP Dual-Modality (5 Cue Families + Gate Ratio) + Faithfulness"]
+    TH --> CON["Non-GT Consistency & Sensitivity Suite (scripts/evaluate_consistency.py)"]
+    TB --> RPT["Laporan Bab 4, Tabel LaTeX & Grafik 300 DPI"]
+    TH --> RPT
     XAI --> RPT
+    CON --> RPT
 ```
 
 ---
 
-## 2. Metodologi Dataset, Kurasi & Pemisahan Label
+## 2. Metodologi Dataset, Pseudo-Label & Representasi 33D Non-Leaky
 
 Pipeline kurasi berada pada `core/data_understanding.py`, `core/schema.py`, `data_manager/dataset_handler.py`, dan `scripts/curate_dataset.py`.
 
 1. **Audit Kualitas Tanpa Mengubah Data Mentah**:
    - Memeriksa *missing values*, komentar kosong/`< 3` karakter, duplikasi mentah maupun duplikasi pasca-normalisasi, validitas kode taksonomi, validitas `confidence score`, konsistensi logis (`cyberbullying == "NO"` tidak boleh memiliki sub-tipe/keparahan perundungan), serta mengeliminasi baris simulasi `MockEngine` (`is_mock=True` atau `annotation_source="mock_simulation"`).
-   - Kegagalan ekstraksi JSON di `core/parser.py` maupun field hilang di `core/schema.py` dipertahankan secara eksplisit sebagai `MISSING_LABEL = "UNKNOWN"` dan `confidence = None` (tidak pernah dipaksa menjadi `"NO"` atau `0.0`).
-2. **Pemisahan Ketat Ground Truth vs Anotasi LLM vs Fitur 33D**:
-   - Kolom target riset (`target_*`) hanya mengambil label tervalidasi (`human_ground_truth`, `gold_label`, dst.) apabila tersedia; jika belum tersedia, dataset diberi penanda eksplisit **`pseudo_labeled_llm`** pada `dataset_manifest.json`.
-   - Kolom sentimen umum (`sentiment`) tidak diasumsikan sebagai ground truth cyberbullying.
-   - Fitur prediktor Stream B diekstrak secara eksklusif dari kolom `llm_*` (`extract_teacher_annotation_features()`), bukan dari kolom `target_*`.
-3. **Dokumentasi Representasi Teacher Vector 33-Dimensi**:
-   - `[0:2]`: `teacher_cyberbullying` (`NO`, `YES`)
-   - `[2:11]`: `teacher_type` (9 kelas taksonomi)
-   - `[11:17]`: `teacher_emotion` (6 kelas emosi)
-   - `[17:25]`: `teacher_cultural_context` (8 kelas konteks budaya Indonesia)
-   - `[25:28]`: `teacher_implicit_level` (`E0`, `E1`, `E2`)
-   - `[28:32]`: `teacher_severity` (`LOW`, `MEDIUM`, `HIGH`, `NONE`)
-   - `[32]`: `teacher_confidence` skalar `[0.0, 1.0]`
-   - Apabila API mengembalikan probabilitas/logprobs terkalibrasi per kelas (`class_probabilities`), nilai aktual digunakan; jika hanya kategori diskret + confidence skalar tersedia, digunakan indikator diskret biner + skalar confidence pada indeks `[32]` (vektor nol untuk `UNKNOWN`) tanpa mengklaim distribusi buatan sebagai probabilitas terkalibrasi.
+   - Kegagalan ekstraksi JSON di `core/parser.py`, field hilang di `core/schema.py`, maupun seluruh sampel yang gagal anotasi disimpan secara transparan ke `output/final/failed_annotations_log.json` beserta alasannya; kode hilang dipertahankan sebagai `MISSING_LABEL = "UNKNOWN"` dan `confidence = None`.
+2. **Kebijakan Supervisi Pseudo-Label LLM & Metadata**:
+   - Seluruh dataset tanpa kolom `human_ground_truth` secara eksplisit dilabeli **`pseudo_labeled_llm`** pada `dataset_manifest.json`, mencatat `llm_models_used`, `prompt_versions_used`, dan `confidence_policy = "raw_llm_confidence_uncalibrated"`.
+   - Fitur prediktor Stream B (`extract_contextual_evidence_vector()`) diekstrak **tanpa menyalin satu pun kolom target klasifikasi** (`cyberbullying`, `type`, `emotion`, `cultural_context`, `implicit_level`, `severity`).
+3. **Taksonomi Representasi 33D Contextual Evidence Cues**:
+   - `[0:7]` (**Linguistic**, 7D): `ling_derogatory_lexical`, `ling_metaphor_simile`, `ling_rhetorical_punct`, `ling_elongation_emphasis`, `ling_slang_register`, `ling_second_person_target`, `ling_negation_litotes`.
+   - `[7:14]` (**Cultural**, 7D): `cult_regional_dialect_cue`, `cult_appearance_norm_cue`, `cult_competence_norm_cue`, `cult_status_hierarchy_cue`, `cult_family_kinship_cue`, `cult_education_norm_cue`, `cult_gender_identity_cue`.
+   - `[14:21]` (**Emotional**, 7D): `emo_hostility_aggression`, `emo_derision_ridicule`, `emo_disgust_contempt`, `emo_humiliation_shaming`, `emo_sadness_distress`, `emo_calm_neutral_register`, `emo_sarcastic_emoji_affect`.
+   - `[21:27]` (**Pragmatic**, 6D): `prag_irony_sarcasm_signal`, `prag_presupposition_insinuation`, `prag_indirect_advice_framing`, `prag_hyperbole_exaggeration`, `prag_imperative_attack`, `prag_benign_supportive`.
+   - `[27:33]` (**Contextual**, 6D): `ctx_direct_addressee_target`, `ctx_public_platform_stage`, `ctx_evaluative_judgment`, `ctx_harm_impact_evidence`, `ctx_provocation_reply`, `ctx_teacher_confidence_raw` (nilai skalar mentah `[0, 1]`, tidak diklaim sebagai probabilitas terkalibrasi).
 
 ---
 
@@ -105,16 +99,24 @@ Implementasi berada pada `core/fusion_model.py`, `scripts/train_indobertweet.py`
 1. **Metrik Evaluasi Komprehensif (`core/evaluation_metrics.py`)**:
    - Accuracy, Macro Precision/Recall, **Macro F1-Score (metrik utama)**, Weighted F1-Score, ROC-AUC, PR-AUC, Confusion Matrix, Calibration Metrics (**ECE, MCE, Brier Score, Log-Loss**), Bootstrap 95% Confidence Interval, rincian tingkat keterbukaan (`E0`, `E1`, `E2`), rincian tipe cyberbullying, serta Error Analysis False Positive / False Negative.
    - `scripts/generate_dissertation_report.py` menolak membuat probabilitas/metrik simulasi apabila checkpoint belum tersedia (`FileNotFoundError`).
-2. **Studi Ablasi 3-Arah (`ablation_comparison.json`)**:
-   - **Model A**: IndoBERTweet-Only (Stream A)
-   - **Model B**: LLM Knowledge-Only (`LLMKnowledgeOnlyClassifier`, Stream B — aktif penuh pada `human_ground_truth`, namun **otomatis diblokir dari evaluasi pada dataset `pseudo_labeled_llm`** untuk mencegah sirkularitas label-sebagai-fitur)
-   - **Model C**: Dual-Stream Hybrid Fusion (IndoBERTweet + LLM Knowledge 6-Head MTL)
-3. **Hasil Empiris Aktual pada Dataset Kurasi Saat Ini (`iicd-curated-13cf579ed473`, 1.493 baris bersih: 1.194 Train / 149 Val / 150 Test, `status = pseudo_labeled_llm`, 0 Cross-Split Overlap)**:
-   - **Model A (IndoBERTweet Baseline, $\tau^*=0.52$ pada Val)**: Accuracy = **72.00%**, Macro-F1 = **0.7175**, ROC-AUC = **0.8182**, PR-AUC = **0.8137**, ECE = **0.1031**
-   - **Model C (Hybrid Fusion — Modality-Masked Student, $\tau^*=0.56$ pada Val)**: Accuracy = **76.00%**, Macro-F1 = **0.7579**, ROC-AUC = **0.8089**, PR-AUC = **0.7845**, ECE = **0.0891** (Multi-Task Head Acc pada Test: Type **65.33%**, Emotion **65.33%**, Cultural **70.00%**, Implicit **67.33%**, Severity **60.00%**, Mean Gate $z = 0.4913$)
-4. **Dual Explainability (`core/shap_explainer.py`, `scripts/evaluate_dual_xai.py`)**:
-   - Menggunakan library `shap` sebenarnya pada `HybridFusionModel` secara terpisah untuk dua modalitas: `shap.Explainer(..., shap.maskers.Text)` untuk **Stream A (atribusi token leksikal dengan visualisasi positif/negatif & global importance)** dan `shap.Explainer` numerik tabular untuk **Stream B (33D LLM features)**.
-   - Mengukur **Faithfulness Comprehensiveness ($\Delta p$)** (30 sampel uji Hybrid Fusion: Mean $\Delta p = 0.1628$) dan memisahkan secara jelas indikator **Diagnostik Lexical Overlap CoT** (32.94%) dari klaim validitas kausal ilmiah.
+2. **Studi Ablasi 6-Konfigurasi pada Split Identik (`ablation_comparison.json`)**:
+   - **E1**: Transformer-Only Baseline (Stream A aktif, Stream B di-mask nol)
+   - **E2**: LLM Knowledge-Only Model (`LLMKnowledgeOnlyClassifier`, 33D Contextual Cues tanpa penyalinan target)
+   - **E3**: Full Hybrid Transformer-LLM Fusion (Gated Cross-Modality Fusion, Stream A + 33D Contextual Cues aktif pada Train/Val/Test)
+   - **E4**: Hybrid without Cultural Knowledge (dimensi Cultural `[7:14]` dimask nol)
+   - **E5**: Hybrid without Emotional Knowledge (dimensi Emotional `[14:21]` dimask nol)
+   - **E6**: Hybrid without Gated Fusion (Concat Fusion Projection)
+3. **Hasil Empiris Aktual pada Checkpoint Terkurasi Saat Ini (`iicd-curated-8ee578088376`, 49 baris teranotasi LLM valid dari 1.508 baris mentah: 39 Train / 5 Val / 5 Test, `target_source = pseudo_labeled_llm`, 0 Cross-Split Overlap)**:
+   - **E1 (Transformer-Only)**: Accuracy = **80.00%**, Macro-F1 = **0.4444**, ROC-AUC = **0.0000**, PR-AUC = **0.6792**, Mean Gate $z = 0.4970$
+   - **E2 (LLM Knowledge-Only 33D)**: Accuracy = **80.00%**, Macro-F1 = **0.7619**, ROC-AUC = **1.0000**, PR-AUC = **1.0000**
+   - **E3 (Full Hybrid Gated Fusion, $\tau^*=0.20$ pada Val)**: Accuracy = **80.00%**, Macro-F1 = **0.4444**, PR-AUC = **0.6792**, Mean Gate $z = 0.4941$ (Multi-Task Head Acc pada Test: Type **20.00%**, Emotion **40.00%**, Cultural **20.00%**, Implicit **40.00%**, Severity **20.00%**)
+   - **E4 (Hybrid no Cultural)** & **E5 (Hybrid no Emotional)**: Accuracy = **80.00%**, Macro-F1 = **0.4444**, Mean Gate $z = 0.4943 / 0.4937$
+   - **E6 (Hybrid Concat, non-gated)**: Accuracy = **80.00%**, Macro-F1 = **0.4444**, ROC-AUC = **1.0000**, PR-AUC = **1.0000**
+4. **Dual Explainability & Cross-Modal Gate (`core/shap_explainer.py`, `scripts/evaluate_dual_xai.py`)**:
+   - Menggunakan `shap.Explainer(..., shap.maskers.Text)` untuk **Stream A (atribusi token)** dan `shap.Explainer` tabular untuk **Stream B (33D Contextual Cues + agregasi 5 Cue Families: Cultural 0.0063, Emotional 0.0051, Contextual 0.0051, Pragmatic 0.0042, Linguistic 0.0034)**.
+   - Mengukur **Faithfulness Comprehensiveness ($\Delta p$)** (5 sampel uji: Mean $\Delta p = 0.0144$) serta memisahkan **Diagnostik Lexical Overlap CoT** (50.0% / 60.0%) dari klaim validitas kausal.
+5. **Non-GT Consistency & Sensitivity Suite (`scripts/evaluate_consistency.py`)**:
+   - Mengaudit distribusi kelas & *imbalance ratio*, aktivasi 5 keluarga cue Stream B (`nonzero_rate` 40%–100%), kesepakatan guru-murid (Cohen's $\kappa$ antara pseudo-label LLM vs prediksi 6-Head Hybrid Model), analisis FP/FN per `implicit_level`, serta *repeat-run Krippendorff $\alpha$* bila dijalankan dengan API SumoPod aktif.
 
 ---
 
@@ -156,16 +158,19 @@ python3 scripts/curate_dataset.py
 # 2. Training Baseline IndoBERTweet (optimasi threshold di Validation Set)
 python3 scripts/train_indobertweet.py --epochs 4
 
-# 3. Training Dual-Stream Hybrid Fusion 6-Head MTL & Studi Ablasi 3-Arah
+# 3. Training Dual-Stream Hybrid Fusion 6-Head MTL & Studi Ablasi 6-Arah (E1-E6)
 python3 scripts/train_hybrid_fusion.py --epochs 4
 
-# 4. Generate Laporan Evaluasi Komprehensif, Grafik 300 DPI & Tabel LaTeX
-python3 scripts/generate_dissertation_report.py
-
-# 5. Evaluasi Real SHAP Dual-XAI & Faithfulness Comprehensiveness
+# 4. Evaluasi Real SHAP Dual-XAI (5 Cue Families + Gate Ratio) & Faithfulness Comprehensiveness
 python3 scripts/evaluate_dual_xai.py --model-type hybrid --max-samples 30
 
-# 6. Menjalankan seluruh Unit & Integration Test + Streamlit AppTest
+# 5. Evaluasi Non-GT Consistency, Cohen Kappa Guru-Murid & Repeat-Run Stability
+python3 scripts/evaluate_consistency.py
+
+# 6. Generate Laporan Evaluasi Komprehensif, Grafik 300 DPI & Tabel LaTeX
+python3 scripts/generate_dissertation_report.py
+
+# 7. Menjalankan seluruh Unit & Integration Test + Streamlit AppTest
 pytest tests/test_iicd_pipeline.py -v
 ```
 
@@ -202,8 +207,7 @@ iicd_annotation_app/
 
 ---
 
-## 8. Limitasi Penelitian & Rekomendasi Lanjutan
+## 8. Batasan Metodologis & Catatan Eksekusi Saat Ini
 
-1. **Ketiadaan Gold Standard Manusia pada Checkpoint Saat Ini**: Dataset `checkpoint_Dataset-Research.csv` belum memiliki kolom anotasi cyberbullying oleh annotator manusia independen (hanya memiliki kolom `sentiment` yang bukan merupakan label perundungan siber). Oleh karena itu, metrik evaluasi pada putaran ini mengukur kesepakatan terhadap `pseudo_labeled_llm` dalam skema *leakage-free modality-masked student*.
-2. **Evaluasi Manusia & Inter-Annotator Agreement**: Untuk validasi akhir naskah disertasi, tambahkan kolom `human_ground_truth` (dan opsional `human_type`, `human_emotion`, dll.) hasil konsensus ahli ($\kappa$ Cohen/Fleiss) ke dataset input, lalu jalankan kembali pipeline agar **Model B (LLM-Only)** dan **Model C (Hybrid Fusion Full Dual-Stream)** terukur murni terhadap gold standard manusia.
-3. **Ketidakseimbangan Sub-Kelas E2 & Taksonomi Minor**: Pada split uji saat ini hanya terdapat 1 sampel `E2` dan beberapa sub-kelas minor (`SAR`, `SHM`, `EXC`, `SEX`), sehingga interpretasi makro F1 sub-kelas memerlukan perluasan sampel *implicit/cultural cyberbullying*.
+1. **Supervisi Pseudo-Label LLM (`pseudo_labeled_llm`)**: Seluruh pelatihan dan evaluasi pada penelitian ini menggunakan pseudo-label yang dihasilkan LLM SumoPod tanpa ketergantungan pada human ground truth. Metrik diukur sebagai kesepakatan serta konsistensi antara model hybrid dengan pseudo-label dan bukti kontekstual LLM.
+2. **Cakupan Anotasi Checkpoint Saat Ini**: Berkas `checkpoint_Dataset-Research.csv` saat ini berisi **1.508 baris mentah**, namun **49 baris** di antaranya memiliki anotasi LLM valid (39 Train / 5 Val / 5 Test) dan **1.459 baris** lainnya tercatat di `failed_annotations_log.json` karena belum teranotasi (`cyberbullying` kosong). Melengkapi batch annotation pada seluruh 1.508 baris lalu menjalankan ulang pipeline kurasi–pelatihan–evaluasi akan meningkatkan representativitas statistik split validasi dan uji (khususnya sub-kelas `E2` dan taksonomi minor `SAR`, `SHM`, `EXC`, `SEX`).

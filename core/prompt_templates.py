@@ -1,6 +1,6 @@
 from typing import List, Dict, Optional
 
-PROMPT_VERSION = "iicd-v2.0-sumopod"
+PROMPT_VERSION = "iicd-v3.0-sumopod"
 
 LABEL_SCHEMA = """
 Cyberbullying:
@@ -46,20 +46,28 @@ LOW / MEDIUM / HIGH / NONE (NONE jika Cyberbullying adalah NO)
 Confidence:
 Nilai probabilitas desimal antara 0.00 hingga 1.00 (misalnya 0.95, 0.85, 0.70).
 WAJIB angka numerik desimal. DILARANG menggunakan kata seperti "HIGH", "MEDIUM", atau "LOW".
+
+Contextual Evidence Cues (skor bukti independen 0.00-1.00 per sinyal, terpisah dari label target):
+- linguistic: derogatory_lexical, metaphor_simile, rhetorical_punct
+- cultural: appearance_norm, competence_norm, status_hierarchy, regional_dialect, family_kinship, gender_identity
+- emotional: hostility_aggression, derision_ridicule, disgust_contempt, humiliation_shaming, sadness_distress
+- pragmatic: irony_sarcasm, presupposition_insinuation, indirect_advice, benign_supportive
+- contextual: direct_addressee, public_stage, evaluative_judgment, harm_impact_evidence
 """
 
 DEFAULT_SYSTEM_PROMPT = """You are an expert Indonesian cyberbullying annotation researcher.
-Analyze the given text strictly according to the provided multi-dimensional taxonomy.
+Analyze the given text strictly according to the provided multi-dimensional taxonomy and extract independent contextual evidence cues.
 
 CRITICAL RULES:
-1. Every field is REQUIRED. NEVER leave any field empty (""), null, or missing.
+1. Every taxonomy field is REQUIRED. NEVER leave any field empty (""), null, or missing.
 2. If cyberbullying is NO: explicitly set type="NONE", cultural_context="NONE", severity="NONE" (or "LOW"), implicit_level="E0".
 3. confidence MUST be a decimal float between 0.00 and 1.00 (e.g. 0.95), NEVER words like "HIGH" or "LOW".
-4. explanation MUST be a concise 1-2 sentence rationale.
-5. Return strictly a single valid JSON object without markdown backticks (```) or any extra commentary."""
+4. explanation MUST be a concise 1-2 sentence chain-of-thought rationale describing linguistic, cultural, emotional, and pragmatic evidence in the comment.
+5. contextual_cues MUST provide decimal evidence scores [0.00-1.00] for linguistic, cultural, emotional, pragmatic, and contextual cues observed in the text.
+6. Return strictly a single valid JSON object without markdown backticks (```) or any extra commentary."""
 
 def build_user_prompt(text: str) -> str:
-    """Constructs the structured user prompt for multi-dimensional cyberbullying annotation."""
+    """Constructs the structured user prompt for multi-dimensional cyberbullying annotation and cue extraction."""
     return f"""Text:
 {text}
 
@@ -75,7 +83,14 @@ Format JSON yang wajib diikuti:
   "implicit_level": "E0/E1/E2",
   "severity": "LOW/MEDIUM/HIGH/NONE",
   "confidence": 0.95,
-  "explanation": "concise rationale"
+  "explanation": "concise rationale",
+  "contextual_cues": {{
+    "linguistic": {{"derogatory_lexical": 0.0, "metaphor_simile": 0.0, "rhetorical_punct": 0.0}},
+    "cultural": {{"appearance_norm": 0.0, "competence_norm": 0.0, "status_hierarchy": 0.0, "regional_dialect": 0.0, "family_kinship": 0.0, "gender_identity": 0.0}},
+    "emotional": {{"hostility_aggression": 0.0, "derision_ridicule": 0.0, "disgust_contempt": 0.0, "humiliation_shaming": 0.0, "sadness_distress": 0.0}},
+    "pragmatic": {{"irony_sarcasm": 0.0, "presupposition_insinuation": 0.0, "indirect_advice": 0.0, "benign_supportive": 0.0}},
+    "contextual": {{"direct_addressee": 0.0, "public_stage": 0.0, "evaluative_judgment": 0.0, "harm_impact_evidence": 0.0}}
+  }}
 }}"""
 
 

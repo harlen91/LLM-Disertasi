@@ -1,10 +1,10 @@
 {
   "model_architecture": "Hybrid Dual-Stream Gated Fusion (6-Head MTL)",
-  "pretrained_model": "indobenchmark/indobert-base-p1",
+  "pretrained_model": "indolem/indobertweet-base-uncased",
   "model_version": "2.0.0",
-  "dataset_version": "iicd-curated-cfa1f94321d2",
+  "dataset_version": "iicd-curated-8ee578088376",
   "target_source": "pseudo_labeled_llm",
-  "training_date": "2026-11-12T07:12:53.666257+00:00",
+  "training_date": "2026-11-12T08:13:15.580007+00:00",
   "random_seed": 42,
   "optimal_threshold": 0.2,
   "threshold_selection_split": "validation",
@@ -55,7 +55,7 @@
     }
   },
   "hyperparameters": {
-    "epochs_requested": 5,
+    "epochs_requested": 4,
     "epochs_completed": 3,
     "best_epoch": 1,
     "batch_size": 16,
@@ -63,9 +63,12 @@
     "lr_heads": 0.0001,
     "max_length": 128,
     "patience": 2,
-    "modality_dropout_prob": 0.5,
+    "modality_dropout_prob": 0.15,
+    "fusion_mode": "gated",
     "text_input_mode": "text_only",
-    "eval_llm_stream_masked": true
+    "stream_a_active": true,
+    "stream_b_active": true,
+    "eval_llm_stream_masked": false
   },
   "evaluation_metrics": {
     "threshold": 0.2,
@@ -77,13 +80,13 @@
     "weighted_precision": 0.64,
     "weighted_recall": 0.8,
     "weighted_f1": 0.7111,
-    "roc_auc": 0.75,
-    "pr_auc": 0.95,
+    "roc_auc": 0.0,
+    "pr_auc": 0.6792,
     "calibration": {
-      "ece": 0.1589,
-      "mce": 0.3201,
-      "brier_score": 0.1587,
-      "log_loss": 0.4943
+      "ece": 0.5124,
+      "mce": 0.7711,
+      "brier_score": 0.2797,
+      "log_loss": 0.7706
     },
     "confidence_intervals_95": {
       "accuracy": [
@@ -95,12 +98,12 @@
         1.0
       ],
       "roc_auc": [
-        0.25,
-        1.0
+        0.0,
+        0.0
       ],
       "pr_auc": [
-        0.7,
-        1.0
+        0.325,
+        0.7625
       ]
     },
     "confusion_matrix": {
@@ -135,27 +138,22 @@
     },
     "implicitness_breakdown": {
       "E0": {
-        "count": 4,
-        "correct": 3,
-        "accuracy": 0.75,
-        "macro_f1": 0.4286
+        "count": 3,
+        "correct": 2,
+        "accuracy": 0.6667,
+        "macro_f1": 0.4
       },
       "E1": {
-        "count": 1,
-        "correct": 1,
+        "count": 2,
+        "correct": 2,
         "accuracy": 1.0,
         "macro_f1": 1.0
       }
     },
     "type_breakdown": {
-      "BSH": {
-        "count": 2,
-        "correct": 2,
-        "accuracy": 1.0
-      },
       "INS": {
-        "count": 2,
-        "correct": 2,
+        "count": 4,
+        "correct": 4,
         "accuracy": 1.0
       },
       "NONE": {
@@ -171,12 +169,43 @@
       "false_negative_rate": 0.0,
       "fp_samples": [
         {
-          "text": "Anjirr ??",
-          "prob": 0.7381,
+          "text": "Kue Koncol",
+          "prob": 0.7711,
           "implicit_level": "E0"
         }
       ],
       "fn_samples": []
+    },
+    "model_name": "E3. Full Hybrid Transformer-LLM Fusion",
+    "fusion_mode": "gated",
+    "ablation_mask_mode": "none",
+    "mean_gating_z": 0.4941,
+    "multi_task_heads_test": {
+      "type": {
+        "support": 5,
+        "accuracy": 0.2,
+        "macro_f1": 0.1667
+      },
+      "emotion": {
+        "support": 5,
+        "accuracy": 0.4,
+        "macro_f1": 0.1905
+      },
+      "cultural": {
+        "support": 5,
+        "accuracy": 0.2,
+        "macro_f1": 0.1111
+      },
+      "implicit": {
+        "support": 5,
+        "accuracy": 0.4,
+        "macro_f1": 0.2667
+      },
+      "severity": {
+        "support": 5,
+        "accuracy": 0.2,
+        "macro_f1": 0.1667
+      }
     }
   },
   "checkpoint_location": "/Users/harlengilbertsimanullang/Documents/Disertasi/LLM-Augmented Explainable/iicd_annotation_app/output/models/hybrid_fusion_indobertweet/best_hybrid_model.pt",
@@ -184,8 +213,8 @@
   "multi_task_heads_test": {
     "type": {
       "support": 5,
-      "accuracy": 0.4,
-      "macro_f1": 0.1905
+      "accuracy": 0.2,
+      "macro_f1": 0.1667
     },
     "emotion": {
       "support": 5,
@@ -194,20 +223,21 @@
     },
     "cultural": {
       "support": 5,
-      "accuracy": 0.4,
-      "macro_f1": 0.2857
+      "accuracy": 0.2,
+      "macro_f1": 0.1111
     },
     "implicit": {
       "support": 5,
-      "accuracy": 0.8,
-      "macro_f1": 0.4444
+      "accuracy": 0.4,
+      "macro_f1": 0.2667
     },
     "severity": {
       "support": 5,
-      "accuracy": 1.0,
-      "macro_f1": 1.0
+      "accuracy": 0.2,
+      "macro_f1": 0.1667
     }
   },
-  "evaluation_mode": "leakage_free_modality_masked_student",
+  "evaluation_mode": "full_dual_stream_pseudo_label_agreement",
+  "stream_b_representation": "non_leaky_33d_contextual_evidence_cues",
   "resumable_checkpoint": "/Users/harlengilbertsimanullang/Documents/Disertasi/LLM-Augmented Explainable/iicd_annotation_app/output/models/hybrid_fusion_indobertweet/checkpoints/latest_checkpoint.pt"
 }

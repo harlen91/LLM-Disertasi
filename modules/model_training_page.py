@@ -22,7 +22,7 @@ from config import (
     FINAL_DIR,
     MODELS_DIR,
 )
-from core.data_understanding import extract_teacher_annotation_features
+from core.data_understanding import extract_contextual_evidence_vector
 from core.evaluation_metrics import load_model_manifest
 from core.fusion_model import load_hybrid_classifier_with_manifest, predict_hybrid_text
 from core.model_engine import run_single_annotation
@@ -33,6 +33,7 @@ from core.shap_explainer import (
 )
 from data_manager.dataset_handler import sanitize_html_text
 from scripts.curate_dataset import curate_and_normalize
+from scripts.evaluate_consistency import evaluate_consistency_suite
 from scripts.evaluate_dual_xai import evaluate_dual_xai_benchmark
 from scripts.evaluate_indobertweet import get_saved_threshold, load_classifier, predict_text
 from scripts.generate_dissertation_report import run_full_evaluation_pipeline
@@ -234,13 +235,18 @@ def render_model_training_page():
                         lr_heads=1e-4,
                         baseline_model_dir=MODEL_DIR / "best_model",
                     )
-                    if ((MODEL_DIR / "best_model" / "model.safetensors").exists() or (MODEL_DIR / "best_model" / "pytorch_model.bin").exists()):
-                        run_full_evaluation_pipeline(
-                            model_dir=MODEL_DIR / "best_model",
-                            test_csv=test_path,
-                            output_dir=REPORT_DIR,
-                            hybrid_dir=HYBRID_MODEL_DIR,
-                        )
+                    evaluate_consistency_suite(
+                        test_csv=test_path,
+                        full_csv=FINAL_DIR / "iicd_cleaned_indobertweet.csv",
+                        hybrid_weights=HYBRID_MODEL_DIR / "best_hybrid_model.pt",
+                        output_dir=REPORT_DIR,
+                    )
+                    run_full_evaluation_pipeline(
+                        model_dir=MODEL_DIR / "best_model",
+                        test_csv=test_path,
+                        output_dir=REPORT_DIR,
+                        hybrid_dir=HYBRID_MODEL_DIR,
+                    )
                     pbar.progress(1.0)
                     status_box.success("🎉 Pelatihan & Evaluasi Dual-Stream Hybrid Fusion Berhasil Selesai!")
                     st.balloons()
@@ -321,12 +327,12 @@ def render_model_training_page():
 
             target_src = metrics_data.get("target_source", "pseudo_labeled_llm")
             if target_src == "human_ground_truth":
-                st.success("✅ **Status Label Uji: `human_ground_truth`** — Evaluasi dijalankan terhadap label manusia tervalidasi secara independen.")
+                st.success("✅ **Status Label Uji: `human_ground_truth`** — Evaluasi dijalankan terhadap label referensi eksternal tervalidasi.")
             else:
-                st.warning(
-                    "⚠️ **Status Label Uji: `pseudo_labeled_llm`** — Dataset uji belum memiliki kolom ground truth manusia yang tervalidasi. "
-                    "Metrik ini mengukur kesepakatan/distilasi terhadap pseudo-label LLM secara bebas kebocoran (*modality-masked*), "
-                    "bukan akurasi terhadap gold standard manusia."
+                st.info(
+                    "ℹ️ **Kebijakan Supervisi Riset: `pseudo_labeled_llm`** — Evaluasi mengukur kesepakatan & konsistensi model "
+                    "terhadap **LLM-generated pseudo-labels** dengan **Stream A + Stream B (33D Bukti Kontekstual Non-Target) aktif penuh** "
+                    "pada training, validation, testing, dan inference."
                 )
 
             opt_th = float(metrics_data.get("threshold", metrics_data.get("optimal_threshold", 0.50)))
@@ -481,23 +487,58 @@ def render_model_training_page():
                         with open(HYBRID_MODEL_DIR / "ablation_comparison.json", "r", encoding="utf-8") as af:
                             ablation_data = json.load(af)
                     if ablation_data:
+                        ab_keys = [
+                            "E1_transformer_only",
+                            "E2_llm_knowledge_only",
+                            "E3_hybrid_full_fusion",
+                            "E4_hybrid_no_cultural",
+                            "E5_hybrid_no_emotional",
+                            "E6_hybrid_no_gated_fusion",
+                        ]
+                        if not any(ablation_data.get(k) for k in ab_keys):
+                            ab_keys = ["model_a_indobertweet_only", "model_b_llm_only", "model_c_hybrid_fusion"]
+
                         ab_rows = []
-                        for k in ["model_a_indobertweet_only", "model_b_llm_only", "model_c_hybrid_fusion"]:
+                        for k in ab_keys:
                             m = ablation_data.get(k)
                             if not m:
                                 continue
+                            gz = m.get("mean_gating_z")
                             ab_rows.append(
                                 {
-                                    "Varian Ablasi": m.get("model_name", k),
+                                    "Eksperimen Ablasi": m.get("model_name", k),
                                     "Status": m.get("status", "evaluated"),
-                                    "Accuracy": f"{m['accuracy']*100:.2f}%" if m.get("accuracy") is not None else "N/A (Diblokir anti-leakage)",
+                                    "Accuracy": f"{m['accuracy']*100:.2f}%" if m.get("accuracy") is not None else "N/A",
                                     "Macro-F1": f"{m['macro_f1']:.4f}" if m.get("macro_f1") is not None else "N/A",
                                     "ROC-AUC": f"{m['roc_auc']:.4f}" if m.get("roc_auc") is not None else "N/A",
                                     "PR-AUC": f"{m['pr_auc']:.4f}" if m.get("pr_auc") is not None else "N/A",
+                                    "Gate z": f"{gz:.4f}" if isinstance(gz, (int, float)) else "-",
                                 }
                             )
-                        st.markdown("#### 🧪 Tabel Studi Ablasi 3-Arah (`ablation_comparison.json`)")
+                        st.markdown("#### 🧪 Tabel Studi Ablasi 6-Konfigurasi E1–E6 (`ablation_comparison.json`)")
                         st.dataframe(pd.DataFrame(ab_rows), use_container_width=True, hide_index=True)
+
+                    cons_json = REPORT_DIR / "consistency_evaluation.json"
+                    if cons_json.exists():
+                        with open(cons_json, "r", encoding="utf-8") as cf:
+                            cons_data = json.load(cf)
+                        ts_ag = cons_data.get("teacher_student_agreement", {})
+                        if ts_ag.get("available"):
+                            with st.expander("🤝 Reliabilitas Non-GT & Kesepakatan Guru-Murid (LLM vs Hybrid 6-Head)"):
+                                st.caption(cons_data.get("disclaimer", ""))
+                                head_rows = [
+                                    {"Classification Head": hk, **hv}
+                                    for hk, hv in ts_ag.get("head_agreements", {}).items()
+                                ]
+                                st.dataframe(pd.DataFrame(head_rows), use_container_width=True, hide_index=True)
+                                cue_stats = cons_data.get("stream_b_cue_family_stats", {})
+                                if cue_stats:
+                                    st.markdown("**Aktivasi 5 Famili Bukti Kontekstual Stream B (Test Split):**")
+                                    st.dataframe(
+                                        pd.DataFrame([{"Famili Bukti": fk, **fv} for fk, fv in cue_stats.items()]),
+                                        use_container_width=True,
+                                        hide_index=True,
+                                    )
 
                     hyb_manifest = load_model_manifest(HYBRID_MODEL_DIR)
                     if hyb_manifest:
@@ -794,7 +835,7 @@ def render_model_training_page():
                                 )
                                 shap_res = dual_shap["textual_shap"]
                                 vec_shap = dual_shap["llm_vector_shap"]
-                                llm_vec_used = extract_teacher_annotation_features(llm_anno) if llm_anno else None
+                                llm_vec_used = extract_contextual_evidence_vector(llm_anno, text=test_input.strip()) if llm_anno else None
                                 comp_score = compute_faithfulness_comprehensiveness(
                                     explainer, test_input.strip(), shap_res, llm_vector=llm_vec_used
                                 )

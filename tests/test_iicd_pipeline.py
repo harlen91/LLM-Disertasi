@@ -39,8 +39,12 @@ if str(PROJECT_DIR) not in sys.path:
     sys.path.insert(0, str(PROJECT_DIR))
 
 from core.data_understanding import (  # noqa: E402
+    CULTURAL_CUE_SLICE,
+    EMOTIONAL_CUE_SLICE,
     TOTAL_VECTOR_DIM,
     clean_and_normalize_social_text,
+    extract_contextual_evidence_vector,
+    extract_cue_family_summary,
     extract_taxonomy_probability_vector,
     extract_teacher_annotation_features,
     get_teacher_feature_names,
@@ -83,6 +87,10 @@ from scripts.curate_dataset import (  # noqa: E402
     audit_dataset_quality,
     curate_and_normalize,
     verify_no_cross_split_leakage,
+)
+from scripts.evaluate_consistency import (  # noqa: E402
+    compute_krippendorff_alpha_nominal,
+    measure_llm_annotation_consistency,
 )
 from scripts.generate_dissertation_report import (  # noqa: E402
     generate_latex_tables,
@@ -233,43 +241,64 @@ def test_schema_parser_and_missing_label_preservation():
 
 
 # ---------------------------------------------------------------------------
-# 3 & 4. 33-Dim Teacher Feature Vector Validation
+# 3 & 4. Non-Leaky 33-Dim Contextual Evidence Vector Validation
 # ---------------------------------------------------------------------------
 
 def test_33d_teacher_feature_vector_and_schema():
     names = get_teacher_feature_names()
     schema = get_teacher_feature_schema()
     assert len(names) == TOTAL_VECTOR_DIM == 33
-    assert len(schema) == 7
+    assert len(schema) == 5  # Linguistic, Cultural, Emotional, Pragmatic, Contextual
     assert sum(block["dim_end"] - block["dim_start"] for block in schema) == TOTAL_VECTOR_DIM == 33
 
-    # Vector reads `llm_*` columns first (never human target columns)
-    record = {
-        "cyberbullying": "NO",  # fallback / ignored if llm_* present
-        "llm_cyberbullying": "YES",
-        "llm_type": "INSULT",
-        "llm_emotion": "ANG",
-        "llm_cultural_context": "SLANG_GENZ",
-        "llm_implicit_level": "E1",
-        "llm_severity": "MOD",
-        "llm_confidence": 0.88,
+    # ANTI-LEAKAGE INVARIANCE: Mengubah seluruh kolom target TIDAK boleh mengubah vektor 33D!
+    base_evidence = {
+        "comment": "dasar jancuk muka mirip ursula segentong??",
+        "explanation": "Compares appearance to Ursula, mocking weight with rhetorical sarcasm.",
+        "confidence": 0.88,
+        "cyberbullying": "YES",
+        "type": "BSH",
+        "emotion": "MOCK",
+        "cultural_context": "APP",
+        "implicit_level": "E1",
+        "severity": "HIGH",
     }
-    vec = extract_teacher_annotation_features(record)
-    assert vec.shape == (33,)
-    assert vec.dtype == np.float32
-    assert vec[1] == pytest.approx(1.0)  # YES indicator
-    assert vec[0] == pytest.approx(0.0)
-    assert vec[32] == pytest.approx(0.88)
+    flipped_targets = {
+        **base_evidence,
+        "cyberbullying": "NO",
+        "type": "NONE",
+        "emotion": "NEU",
+        "cultural_context": "NONE",
+        "implicit_level": "E0",
+        "severity": "NONE",
+    }
+    vec_a = extract_contextual_evidence_vector(base_evidence)
+    vec_b = extract_contextual_evidence_vector(flipped_targets)
+    assert vec_a.shape == (33,) and vec_a.dtype == np.float32
+    assert np.allclose(vec_a, vec_b)  # Zero target label leakage!
+    assert np.any(vec_a[CULTURAL_CUE_SLICE] > 0.0)
+    assert np.any(vec_a[EMOTIONAL_CUE_SLICE] > 0.0)
+    assert vec_a[32] == pytest.approx(0.88)
 
-    # UNKNOWN record produces pure zero vector (no synthetic probability smoothing)
-    vec_unk = extract_taxonomy_probability_vector({"cyberbullying": "UNKNOWN", "confidence": None})
+    fam_summary = extract_cue_family_summary(vec_a)
+    assert set(fam_summary.keys()) == {"Linguistic", "Cultural", "Emotional", "Pragmatic", "Contextual"}
+
+    # Structured SumoPod v3.0 contextual_cues supported natively
+    cues_v3 = {
+        "comment": "halo",
+        "confidence": 0.90,
+        "contextual_cues": {
+            "cultural": {"appearance_norm": 0.8},
+            "emotional": {"derision_ridicule": 0.7},
+        },
+    }
+    vec_v3 = extract_teacher_annotation_features(cues_v3)
+    assert vec_v3[8] == pytest.approx(0.8)  # cult_appearance_norm_cue
+    assert vec_v3[15] == pytest.approx(0.7)  # emo_derision_ridicule
+
+    # Empty neutral input yields zero vector
+    vec_unk = extract_taxonomy_probability_vector({"comment": "", "explanation": "", "confidence": None})
     assert np.allclose(vec_unk, np.zeros(33, dtype=np.float32))
-
-    # Actual API probabilities respected when supplied
-    probs = {"cyberbullying": {"NO": 0.25, "YES": 0.75}}
-    vec_prob = extract_teacher_annotation_features({"cyberbullying": "YES", "confidence": 0.75}, class_probabilities=probs)
-    assert vec_prob[0] == pytest.approx(0.25)
-    assert vec_prob[1] == pytest.approx(0.75)
 
 
 # ---------------------------------------------------------------------------
@@ -307,10 +336,26 @@ def test_curation_pseudo_label_and_human_gt_separation(tmp_path):
 
     manifest = json.loads((out_dir / "dataset_manifest.json").read_text(encoding="utf-8"))
     assert manifest["label_source"] == "pseudo_labeled_llm"
+    assert manifest["supervision_policy"] == "llm_generated_pseudo_labels"
+    assert manifest["confidence_policy"] == "raw_llm_confidence_uncalibrated"
     assert manifest["has_human_ground_truth"] is False
+    assert manifest["failed_annotations_count"] >= 2
+    assert (out_dir / "failed_annotations_log.json").exists()
     leak_info = manifest["splits"]["cross_split_leakage_check"]
     assert sum(sum(v.values()) for v in leak_info.values()) == 0
     assert (out_dir / "teacher_feature_names.json").exists()
+
+    # Group-aware split test: verify 0 overlap across user_id groups
+    grp_df = _build_synthetic_annotated_df(30, include_human_gt=False)
+    grp_df["user_id"] = [f"user_{i // 3}" for i in range(len(grp_df))]
+    grp_csv = tmp_path / "grouped_raw.csv"
+    grp_df.to_csv(grp_csv, index=False)
+    out_grp = tmp_path / "final_grouped"
+    out_grp.mkdir()
+    curate_and_normalize(grp_csv, out_grp / "cleaned_grp.csv", perform_split=True, random_state=42, group_col="user_id")
+    grp_man = json.loads((out_grp / "dataset_manifest.json").read_text(encoding="utf-8"))
+    assert "group_aware_stratified" in grp_man["splits"]["strategy"]
+    assert sum(sum(v.values()) for v in grp_man["splits"]["cross_split_leakage_check"].values()) == 0
 
     tr = pd.read_csv(out_dir / "train.csv")
     va = pd.read_csv(out_dir / "val.csv")
@@ -423,8 +468,19 @@ def test_hybrid_model_forward_6_heads_loss_masking_and_manifest(tiny_hf_backbone
     assert reloaded_man["optimal_threshold"] == pytest.approx(0.48)
     pred = predict_hybrid_text(reloaded_m, reloaded_tok, dev, "dasar jelek banget", annotation_dict=None, manifest=reloaded_man)
     assert pred["cyberbullying"] in {"YES", "NO"}
-    assert pred["llm_modality_active"] is False  # zeroed Stream B in text-only inference
+    assert pred["has_llm_context"] is False
+    assert pred["llm_modality_active"] is True  # surface linguistic cue active without annotation_dict
     assert len(pred["all_head_probabilities"]) == 6
+
+    # E6 Concatenation Fusion variant & Cultural/Emotional cue slicing
+    concat_model = HybridFusionModel(
+        pretrained_model_name=str(tiny_hf_backbone),
+        llm_input_dim=33,
+        llm_hidden_dim=16,
+        fusion_mode="concat",
+    )
+    out_concat = concat_model(input_ids=input_ids, attention_mask=attn, llm_vectors=llm_vec, labels_binary=y_bin)
+    assert out_concat["logits"]["binary"].shape == (batch, 2) and out_concat["loss"] is not None
 
     with pytest.raises(FileNotFoundError):
         load_hybrid_classifier_with_manifest(tmp_path / "does_not_exist.pt")
@@ -503,6 +559,10 @@ def test_real_shap_dual_modality_and_missing_checkpoint(tiny_hf_backbone, tmp_pa
     assert len(text_res["tokens"]) > 0
     assert "<script>" not in text_res["html_heatmap"]  # HTML escaped in heatmap
     assert vec_res["available"] is True and len(vec_res["shap_values"]) == 33
+    assert set(vec_res["cue_family_shap"].keys()) == {"Linguistic", "Cultural", "Emotional", "Pragmatic", "Contextual"}
+    cm_contrib = dual["cross_modal_contribution"]
+    assert cm_contrib["available"] is True
+    assert (cm_contrib["transformer_gate_z"] + cm_contrib["llm_knowledge_share"]) == pytest.approx(1.0, abs=1e-3)
 
     comp = compute_faithfulness_comprehensiveness(explainer, "dasar kamu jelek banget", text_res)
     assert comp is None or isinstance(comp, float)
@@ -594,9 +654,16 @@ def test_report_generation_no_simulation_and_streamlit_smoke(tmp_path):
     out_dir = tmp_path / "report_ok"
     md_path = generate_markdown_report(sample_metrics, "pseudo_labeled_llm", None, out_dir)
     md_txt = md_path.read_text(encoding="utf-8")
-    assert "pseudo_labeled_llm" in md_txt and "gold standard manusia" in md_txt.lower()
+    assert "pseudo_labeled_llm" in md_txt and "pseudo-label" in md_txt.lower()
     tex = generate_latex_tables(sample_metrics, None)
     assert "tab:overall_performance" in tex
+
+    # Non-GT Consistency & Krippendorff Alpha metrics verification
+    alpha = compute_krippendorff_alpha_nominal([["YES", "YES", "YES"], ["NO", "NO", "NO"], ["YES", "NO", "YES"]])
+    assert alpha is not None and 0.0 <= alpha <= 1.0
+    cons_mock = measure_llm_annotation_consistency(MockEngine(), ["kamu jelek banget", "semangat belajar ya"], n_repeats=2)
+    assert cons_mock["evaluation_scope"] == "llm_internal_consistency_not_human_iaa"
+    assert 0.0 <= cons_mock["binary_unanimous_agreement_rate"] <= 1.0
 
     # Streamlit AppTest smoke test on app.py
     from streamlit.testing.v1 import AppTest

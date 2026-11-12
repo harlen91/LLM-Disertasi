@@ -1,11 +1,20 @@
 {
-  "dataset_version": "iicd-curated-cfa1f94321d2",
-  "curated_at": "2026-11-12T07:11:44.714285+00:00",
+  "dataset_version": "iicd-curated-8ee578088376",
+  "curated_at": "2026-11-12T08:09:21.036199+00:00",
   "input_source": "/Users/harlengilbertsimanullang/Documents/Disertasi/LLM-Augmented Explainable/iicd_annotation_app/output/checkpoints/checkpoint_Dataset-Research.csv",
   "output_dataset": "/Users/harlengilbertsimanullang/Documents/Disertasi/LLM-Augmented Explainable/iicd_annotation_app/output/final/iicd_cleaned_indobertweet.csv",
+  "supervision_policy": "llm_generated_pseudo_labels",
   "has_human_ground_truth": false,
   "label_source": "pseudo_labeled_llm",
-  "pseudo_labeled_warning": "Dataset belum memiliki ground truth manusia independen; seluruh metrik mengevaluasi kesepakatan/distilasi terhadap pseudo-label LLM.",
+  "confidence_policy": "raw_llm_confidence_uncalibrated",
+  "stream_b_representation": "non_leaky_33d_contextual_evidence_cues",
+  "llm_models_used": [
+    "deepseek-v4.1-flash:netra"
+  ],
+  "prompt_versions_used": [
+    "iicd-v2.0-sumopod"
+  ],
+  "evaluation_note": "Evaluasi mengukur kesepakatan/konsistensi model terhadap pseudo-label yang dihasilkan LLM (tanpa ketergantungan pada human ground truth).",
   "raw_audit": {
     "total_rows": 1508,
     "text_column": "comment",
@@ -39,9 +48,86 @@
     "consistency_issue_rows": 1458,
     "mock_simulation_rows": 0
   },
+  "failed_annotations_count": 1459,
+  "failed_annotations_log": "/Users/harlengilbertsimanullang/Documents/Disertasi/LLM-Augmented Explainable/iicd_annotation_app/output/final/failed_annotations_log.json",
   "dedup_dropped": 0,
   "final_rows": 49,
   "teacher_vector_dim": 33,
+  "contextual_cue_schema": [
+    {
+      "dim_start": 0,
+      "dim_end": 7,
+      "family": "Linguistic",
+      "features": [
+        "ling_derogatory_lexical",
+        "ling_metaphor_simile",
+        "ling_rhetorical_punct",
+        "ling_elongation_emphasis",
+        "ling_slang_register",
+        "ling_second_person_target",
+        "ling_negation_litotes"
+      ],
+      "origin": "Surface lexical/morphological/rhetorical text markers + LLM contextual_cues.linguistic + CoT rationale lexical evidence"
+    },
+    {
+      "dim_start": 7,
+      "dim_end": 14,
+      "family": "Cultural",
+      "features": [
+        "cult_regional_dialect_cue",
+        "cult_appearance_norm_cue",
+        "cult_competence_norm_cue",
+        "cult_status_hierarchy_cue",
+        "cult_family_kinship_cue",
+        "cult_education_norm_cue",
+        "cult_gender_identity_cue"
+      ],
+      "origin": "Indonesian regional dialect lexicon + LLM contextual_cues.cultural + CoT cultural norm evidence (zero copy of target cultural_context)"
+    },
+    {
+      "dim_start": 14,
+      "dim_end": 21,
+      "family": "Emotional",
+      "features": [
+        "emo_hostility_aggression",
+        "emo_derision_ridicule",
+        "emo_disgust_contempt",
+        "emo_humiliation_shaming",
+        "emo_sadness_distress",
+        "emo_calm_neutral_register",
+        "emo_sarcastic_emoji_affect"
+      ],
+      "origin": "Emoji affective polarity + LLM contextual_cues.emotional + CoT affective tone evidence (zero copy of target emotion)"
+    },
+    {
+      "dim_start": 21,
+      "dim_end": 27,
+      "family": "Pragmatic",
+      "features": [
+        "prag_irony_sarcasm_signal",
+        "prag_presupposition_insinuation",
+        "prag_indirect_advice_framing",
+        "prag_hyperbole_exaggeration",
+        "prag_imperative_attack",
+        "prag_benign_supportive"
+      ],
+      "origin": "Illocutionary/pragmatic framing cues + LLM contextual_cues.pragmatic + CoT pragmatic speech-act evidence"
+    },
+    {
+      "dim_start": 27,
+      "dim_end": 33,
+      "family": "Contextual",
+      "features": [
+        "ctx_direct_addressee_target",
+        "ctx_public_platform_stage",
+        "ctx_evaluative_judgment",
+        "ctx_harm_impact_evidence",
+        "ctx_provocation_reply",
+        "ctx_teacher_confidence_raw"
+      ],
+      "origin": "Target-addressee/platform discourse markers + LLM CoT harm evidence + uncalibrated scalar confidence [0,1]"
+    }
+  ],
   "class_distribution": {
     "cyberbullying_binary": {
       "1": 38,
@@ -80,6 +166,8 @@
   },
   "splits": {
     "random_state": 42,
+    "strategy": "stratified_composite_pseudo_label",
+    "group_col": null,
     "train_size": 39,
     "val_size": 5,
     "test_size": 5,

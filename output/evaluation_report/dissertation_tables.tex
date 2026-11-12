@@ -3,22 +3,22 @@
 % ===============================================================
 \begin{table}[htbp]
 \centering
-\caption{Metrik Evaluasi Komprehensif pada Data Uji (Test Set, $\tau^*=0.76$)}
+\caption{Metrik Evaluasi Komprehensif pada Data Uji (Test Set, $\tau^*=0.20$)}
 \label{tab:overall_performance}
 \begin{tabular}{lc}
 \hline
 \textbf{Metrik Evaluasi} & \textbf{Nilai (95\% Bootstrap CI)} \\
 \hline
-Accuracy & 0.2000 ([0.0, 0.6]) \\
-\textbf{Macro F1-Score} & \textbf{0.1667} ([0.0, 0.375]) \\
-Weighted F1-Score & 0.0667 \\
-Macro Precision & 0.1000 \\
+Accuracy & 0.8000 ([0.4, 1.0]) \\
+\textbf{Macro F1-Score} & \textbf{0.4444} ([0.2857, 1.0]) \\
+Weighted F1-Score & 0.7111 \\
+Macro Precision & 0.4000 \\
 Macro Recall & 0.5000 \\
 ROC-AUC & 0.0 ([0.0, 0.0]) \\
 PR-AUC & 0.6792 ([0.325, 0.7625]) \\
-Expected Calibration Error (ECE) & 0.0559 \\
-Brier Score & 0.1689 \\
-Log-Loss & 0.5243 \\
+Expected Calibration Error (ECE) & 0.5124 \\
+Brier Score & 0.2797 \\
+Log-Loss & 0.7706 \\
 \hline
 \end{tabular}
 \end{table}
@@ -34,10 +34,10 @@ Log-Loss & 0.5243 \\
 \hline
 \textbf{Kelas} & \textbf{Precision} & \textbf{Recall} & \textbf{F1-Score} & \textbf{Support} \\
 \hline
-Non-Cyberbullying (0) & 0.2000 & 1.0000 & 0.3333 & 1 \\
-Cyberbullying (1) & 0.0000 & 0.0000 & 0.0000 & 4 \\
+Non-Cyberbullying (0) & 0.0000 & 0.0000 & 0.0000 & 1 \\
+Cyberbullying (1) & 0.8000 & 1.0000 & 0.8889 & 4 \\
 \hline
-\multicolumn{5}{l}{\footnotesize \textit{Confusion Matrix: TN=1, FP=0, FN=4, TP=0}} \\
+\multicolumn{5}{l}{\footnotesize \textit{Confusion Matrix: TN=0, FP=1, FN=0, TP=4}} \\
 \end{tabular}
 \end{table}
 
@@ -52,26 +52,29 @@ Cyberbullying (1) & 0.0000 & 0.0000 & 0.0000 & 4 \\
 \hline
 \textbf{Tingkat} & \textbf{Support} & \textbf{Akurasi (\%)} & \textbf{Macro-F1} \\
 \hline
-E0 & 4 & 25.00\% & 0.2000 \\
-E1 & 1 & 0.00\% & 0.0000 \\
+E0 & 3 & 66.67\% & 0.4000 \\
+E1 & 2 & 100.00\% & 1.0000 \\
 \hline
 \end{tabular}
 \end{table}
 
 % ===============================================================
-% TABEL 4: ABLATION STUDY (INDOBERTWEET-ONLY vs LLM-ONLY vs HYBRID)
+% TABEL 4: 6-WAY ABLATION STUDY (E1 - E6 PADA TEST SET IDENTIK)
 % ===============================================================
 \begin{table}[htbp]
 \centering
-\caption{Studi Ablasi pada Test Set yang Sama}
+\caption{Studi Ablasi 6-Konfigurasi pada Split yang Sama (Evaluasi terhadap LLM Pseudo-Labels)}
 \label{tab:ablation_study}
-\begin{tabular}{lcccc}
+\begin{tabular}{lccccc}
 \hline
-\textbf{Varian Model} & \textbf{Accuracy} & \textbf{Macro-F1} & \textbf{ROC-AUC} & \textbf{PR-AUC} \\
+\textbf{Eksperimen} & \textbf{Accuracy} & \textbf{Macro-F1} & \textbf{ROC-AUC} & \textbf{PR-AUC} & \textbf{Gate $z$} \\
 \hline
-A. IndoBERTweet-Only (Stream A) & 0.2000 & 0.1667 & 0.0 & 0.6792 \\
-B. LLM Representation-Only (Stream B) & \multicolumn{4}{c}{Diblokir (blocked_circular_pseudo_label_leakage)} \\
-C. Hybrid Dual-Stream Fusion (IndoBERTweet + LLM Knowledge) & 0.8000 & 0.4444 & 0.75 & 0.95 \\
+E1. Transformer-Only Baseline (Stream A) & 0.8000 & 0.4444 & 0.0 & 0.6792 & 0.4970 \\
+E2. LLM Knowledge-Only Model (33D Contextual Cues) & 0.8000 & 0.7619 & 1.0 & 1.0 & - \\
+E3. Full Hybrid Transformer-LLM Fusion & 0.8000 & 0.4444 & 0.0 & 0.6792 & 0.4941 \\
+E4. Hybrid without Cultural Knowledge & 0.8000 & 0.4444 & 0.0 & 0.6792 & 0.4943 \\
+E5. Hybrid without Emotional Knowledge & 0.8000 & 0.4444 & 0.0 & 0.6792 & 0.4937 \\
+E6. Hybrid without Gated Fusion (Concat) & 0.8000 & 0.4444 & 1.0 & 1.0 & 0.5000 \\
 \hline
 \end{tabular}
 \end{table}

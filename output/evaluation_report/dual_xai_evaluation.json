@@ -1,229 +1,286 @@
 {
   "evaluation_name": "Dual Explainability Benchmark (SHAP Library [hybrid] vs SumoPod LLM CoT)",
-  "shap_method": "shap.Explainer(shap.maskers.Text) + shap.Explainer(Tabular Permutation)",
+  "shap_method": "shap.Explainer(shap.maskers.Text) + shap.Explainer(Tabular Permutation on 33D Contextual Cues)",
   "model_type": "hybrid",
   "target_source": "pseudo_labeled_llm",
-  "llm_vector_conditioning": "modality_masked_zeros",
+  "llm_vector_conditioning": "active_33d_contextual_evidence",
   "total_test_samples": 5,
   "scientific_faithfulness_metrics": {
-    "mean_comprehensiveness": 0.0006,
+    "mean_comprehensiveness": 0.0144,
     "samples_measured": 5
   },
   "diagnostic_lexical_heuristics": {
     "disclaimer": "Metrik lexical overlap bersifat diagnostik heuristik, bukan ukuran validitas kausal tervalidasi.",
-    "mean_lexical_alignment_score": 40.0,
-    "lexical_alignment_rate_percentage": 40.0
+    "mean_lexical_alignment_score": 50.0,
+    "lexical_alignment_rate_percentage": 60.0
   },
   "implicitness_breakdown": {
     "E0": {
-      "count": 4,
-      "mean_diagnostic_lexical_alignment": 40.0,
-      "lexical_alignment_rate": 50.0,
-      "mean_comprehensiveness": -0.0095
+      "count": 3,
+      "mean_diagnostic_lexical_alignment": 16.67,
+      "lexical_alignment_rate": 33.33,
+      "mean_comprehensiveness": 0.0397
     },
     "E1": {
-      "count": 1,
-      "mean_diagnostic_lexical_alignment": 40.0,
-      "lexical_alignment_rate": 0.0,
-      "mean_comprehensiveness": 0.0408
+      "count": 2,
+      "mean_diagnostic_lexical_alignment": 100.0,
+      "lexical_alignment_rate": 100.0,
+      "mean_comprehensiveness": -0.0236
     }
   },
   "global_feature_importance": {
     "sample_count": 5,
     "top_global_tokens": [
       {
-        "token": "si",
-        "mean_abs_shap": 0.0691,
+        "token": "kue",
+        "mean_abs_shap": 0.1033,
         "occurrences": 1
       },
       {
-        "token": "banget",
-        "mean_abs_shap": 0.0632,
+        "token": "lumayan",
+        "mean_abs_shap": 0.0551,
         "occurrences": 1
       },
       {
-        "token": "s",
-        "mean_abs_shap": 0.0516,
+        "token": "di",
+        "mean_abs_shap": 0.0544,
         "occurrences": 1
       },
       {
-        "token": "sor",
-        "mean_abs_shap": 0.0465,
+        "token": "k",
+        "mean_abs_shap": 0.0472,
         "occurrences": 1
       },
       {
-        "token": "r",
-        "mean_abs_shap": 0.0437,
+        "token": "dan",
+        "mean_abs_shap": 0.0369,
         "occurrences": 1
       },
       {
-        "token": "anj",
-        "mean_abs_shap": 0.0395,
-        "occurrences": 1
-      },
-      {
-        "token": "ke",
-        "mean_abs_shap": 0.0357,
-        "occurrences": 1
-      },
-      {
-        "token": "muka",
-        "mean_abs_shap": 0.0314,
-        "occurrences": 1
-      },
-      {
-        "token": "ng",
-        "mean_abs_shap": 0.0285,
-        "occurrences": 1
-      },
-      {
-        "token": "ir",
-        "mean_abs_shap": 0.0262,
-        "occurrences": 1
-      },
-      {
-        "token": "orang",
-        "mean_abs_shap": 0.0234,
+        "token": "norak",
+        "mean_abs_shap": 0.0323,
         "occurrences": 2
       },
       {
-        "token": "dari",
-        "mean_abs_shap": 0.0197,
+        "token": "konco",
+        "mean_abs_shap": 0.0313,
+        "occurrences": 1
+      },
+      {
+        "token": "bayu",
+        "mean_abs_shap": 0.0275,
+        "occurrences": 2
+      },
+      {
+        "token": "urus",
+        "mean_abs_shap": 0.0254,
         "occurrences": 1
       },
       {
         "token": "?",
-        "mean_abs_shap": 0.0178,
+        "mean_abs_shap": 0.0208,
         "occurrences": 4
       },
       {
-        "token": "awal",
-        "mean_abs_shap": 0.0157,
+        "token": "tidak",
+        "mean_abs_shap": 0.0147,
         "occurrences": 1
       },
       {
-        "token": "saya",
-        "mean_abs_shap": 0.0148,
+        "token": "phobia",
+        "mean_abs_shap": 0.0145,
+        "occurrences": 1
+      },
+      {
+        "token": "pasangan",
+        "mean_abs_shap": 0.0145,
+        "occurrences": 1
+      },
+      {
+        "token": "terlihat",
+        "mean_abs_shap": 0.0069,
+        "occurrences": 1
+      },
+      {
+        "token": "okb",
+        "mean_abs_shap": 0.0056,
         "occurrences": 1
       }
     ],
-    "top_global_llm_features": []
+    "top_global_llm_features": [
+      {
+        "feature": "cult_status_hierarchy_cue",
+        "mean_abs_shap": 0.0367
+      },
+      {
+        "feature": "prag_presupposition_insinuation",
+        "mean_abs_shap": 0.0251
+      },
+      {
+        "feature": "emo_calm_neutral_register",
+        "mean_abs_shap": 0.0215
+      },
+      {
+        "feature": "ctx_teacher_confidence_raw",
+        "mean_abs_shap": 0.0153
+      },
+      {
+        "feature": "ctx_harm_impact_evidence",
+        "mean_abs_shap": 0.0102
+      },
+      {
+        "feature": "ling_rhetorical_punct",
+        "mean_abs_shap": 0.0101
+      },
+      {
+        "feature": "emo_hostility_aggression",
+        "mean_abs_shap": 0.008
+      },
+      {
+        "feature": "ling_derogatory_lexical",
+        "mean_abs_shap": 0.0078
+      },
+      {
+        "feature": "cult_appearance_norm_cue",
+        "mean_abs_shap": 0.0072
+      },
+      {
+        "feature": "emo_derision_ridicule",
+        "mean_abs_shap": 0.006
+      },
+      {
+        "feature": "ling_negation_litotes",
+        "mean_abs_shap": 0.0059
+      },
+      {
+        "feature": "ctx_provocation_reply",
+        "mean_abs_shap": 0.0054
+      },
+      {
+        "feature": "ling_metaphor_simile",
+        "mean_abs_shap": 0.0
+      },
+      {
+        "feature": "ling_elongation_emphasis",
+        "mean_abs_shap": 0.0
+      },
+      {
+        "feature": "ling_slang_register",
+        "mean_abs_shap": 0.0
+      }
+    ],
+    "global_cue_families": {
+      "Linguistic": 0.0034,
+      "Cultural": 0.0063,
+      "Emotional": 0.0051,
+      "Pragmatic": 0.0042,
+      "Contextual": 0.0051
+    }
   },
   "detailed_sample_results": [
     {
       "idx": 0,
-      "comment": "Anjirr ??",
-      "cyberbullying": "NO",
-      "implicit_level": "E0",
-      "type": "NONE",
-      "cyberbullying_prob": 0.7381,
-      "top_positive_shap_tokens": [
-        "r",
-        "Anj",
-        "?",
-        "ir"
-      ],
-      "top_negative_shap_tokens": [
-        "?"
-      ],
-      "faithfulness_comprehensiveness": -0.0,
-      "diagnostic_lexical_aligned_tokens": [
-        "Anj"
-      ],
-      "diagnostic_lexical_alignment_score": 25.0,
-      "is_lexically_aligned": false
-    },
-    {
-      "idx": 1,
-      "comment": "Songong banget muka nya",
+      "comment": "phobia bayu",
       "cyberbullying": "YES",
-      "implicit_level": "E0",
+      "implicit_level": "E1",
       "type": "INS",
-      "cyberbullying_prob": 0.6799,
+      "cyberbullying_prob": 0.5756,
       "top_positive_shap_tokens": [
-        "muka",
-        "ng",
-        "nya",
-        "Songo"
+        "bayu"
       ],
       "top_negative_shap_tokens": [
-        "banget"
+        "phobia"
       ],
-      "faithfulness_comprehensiveness": -0.0503,
+      "faithfulness_comprehensiveness": -0.0172,
       "diagnostic_lexical_aligned_tokens": [
-        "muka",
-        "nya",
-        "Songo"
+        "bayu"
       ],
-      "diagnostic_lexical_alignment_score": 75.0,
+      "diagnostic_lexical_alignment_score": 100.0,
       "is_lexically_aligned": true
     },
     {
-      "idx": 2,
-      "comment": "Akulah si princes gendut",
+      "idx": 1,
+      "comment": "pasangan norakk",
       "cyberbullying": "YES",
       "implicit_level": "E0",
-      "type": "BSH",
-      "cyberbullying_prob": 0.7583,
+      "type": "INS",
+      "cyberbullying_prob": 0.5714,
       "top_positive_shap_tokens": [
-        "si",
-        "s",
-        "gendut",
-        "Akulah",
-        "prince"
+        "k"
       ],
-      "top_negative_shap_tokens": [],
-      "faithfulness_comprehensiveness": 0.0102,
+      "top_negative_shap_tokens": [
+        "norak",
+        "pasangan"
+      ],
+      "faithfulness_comprehensiveness": -0.0,
+      "diagnostic_lexical_aligned_tokens": [],
+      "diagnostic_lexical_alignment_score": 0.0,
+      "is_lexically_aligned": false
+    },
+    {
+      "idx": 2,
+      "comment": "Kue Koncol",
+      "cyberbullying": "NO",
+      "implicit_level": "E0",
+      "type": "NONE",
+      "cyberbullying_prob": 0.7711,
+      "top_positive_shap_tokens": [
+        "Kue",
+        "l"
+      ],
+      "top_negative_shap_tokens": [
+        "Konco"
+      ],
+      "faithfulness_comprehensiveness": 0.0814,
       "diagnostic_lexical_aligned_tokens": [
-        "gendut",
-        "Akulah",
-        "prince"
+        "Kue"
       ],
-      "diagnostic_lexical_alignment_score": 60.0,
+      "diagnostic_lexical_alignment_score": 50.0,
       "is_lexically_aligned": true
     },
     {
       "idx": 3,
-      "comment": "Bongsor ke ??",
+      "comment": "bayu terlihat tidak di urus",
       "cyberbullying": "YES",
       "implicit_level": "E1",
-      "type": "BSH",
-      "cyberbullying_prob": 0.8021,
-      "top_positive_shap_tokens": [
-        "sor",
-        "ke",
-        "?",
-        "?",
-        "Bong"
-      ],
-      "top_negative_shap_tokens": [],
-      "faithfulness_comprehensiveness": 0.0408,
-      "diagnostic_lexical_aligned_tokens": [
-        "sor",
-        "Bong"
-      ],
-      "diagnostic_lexical_alignment_score": 40.0,
-      "is_lexically_aligned": false
-    },
-    {
-      "idx": 4,
-      "comment": "orang NORAK tuh.. dr awal gw ga pernah follow nih org",
-      "cyberbullying": "YES",
-      "implicit_level": "E0",
       "type": "INS",
-      "cyberbullying_prob": 0.7799,
+      "cyberbullying_prob": 0.5437,
       "top_positive_shap_tokens": [
-        "dari",
-        "orang",
-        "awal",
-        "saya",
+        "urus",
         "tidak"
       ],
       "top_negative_shap_tokens": [
-        "orang",
-        "pernah"
+        "di",
+        "bayu",
+        "terlihat"
       ],
-      "faithfulness_comprehensiveness": 0.0021,
+      "faithfulness_comprehensiveness": -0.03,
+      "diagnostic_lexical_aligned_tokens": [
+        "urus",
+        "tidak"
+      ],
+      "diagnostic_lexical_alignment_score": 100.0,
+      "is_lexically_aligned": true
+    },
+    {
+      "idx": 4,
+      "comment": "lumayan okb dan norak ????",
+      "cyberbullying": "YES",
+      "implicit_level": "E0",
+      "type": "INS",
+      "cyberbullying_prob": 0.5182,
+      "top_positive_shap_tokens": [
+        "lumayan",
+        "?",
+        "?",
+        "?",
+        "?"
+      ],
+      "top_negative_shap_tokens": [
+        "norak",
+        "dan"
+      ],
+      "faithfulness_comprehensiveness": 0.0377,
       "diagnostic_lexical_aligned_tokens": [],
       "diagnostic_lexical_alignment_score": 0.0,
       "is_lexically_aligned": false

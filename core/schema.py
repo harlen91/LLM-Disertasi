@@ -23,6 +23,42 @@ class AnnotationSchema(BaseModel):
         default=None, ge=0.0, le=1.0, description="Numeric confidence score in range 0.0 to 1.0"
     )
     explanation: Optional[str] = Field(default="", description="Chain-of-thought explanation of the classification")
+    contextual_cues: Optional[Dict[str, Dict[str, float]]] = Field(
+        default=None,
+        description="Structured non-target contextual evidence cues (linguistic, cultural, emotional, pragmatic, contextual)",
+    )
+
+
+def sanitize_contextual_cues(raw_cues: Any) -> Dict[str, Dict[str, float]]:
+    """
+    Normalizes optional structured `contextual_cues` returned by SumoPod LLM (`iicd-v3.0-sumopod`)
+    into clamped floats in [0.0, 1.0] grouped by the 5 evidence families.
+    """
+    if isinstance(raw_cues, str):
+        raw_str = raw_cues.strip()
+        if raw_str.startswith("{"):
+            try:
+                import json as _json
+                raw_cues = _json.loads(raw_str)
+            except Exception:
+                raw_cues = {}
+        else:
+            raw_cues = {}
+    if not isinstance(raw_cues, dict):
+        return {}
+
+    cleaned: Dict[str, Dict[str, float]] = {}
+    for group in ("linguistic", "cultural", "emotional", "pragmatic", "contextual"):
+        sub = raw_cues.get(group)
+        if isinstance(sub, dict):
+            cleaned_sub: Dict[str, float] = {}
+            for k, v in sub.items():
+                score = parse_confidence_score(v, default=None)
+                if score is not None:
+                    cleaned_sub[str(k)] = round(max(0.0, min(1.0, float(score))), 4)
+            if cleaned_sub:
+                cleaned[group] = cleaned_sub
+    return cleaned
 
 
 def parse_confidence_score(val: Any, default: Optional[float] = 0.85) -> Optional[float]:
@@ -227,7 +263,9 @@ def sanitize_annotation_dict(
         else:
             exp_val = f"Teks teridentifikasi memuat unsur perundungan siber ({t_val})."
 
-    return {
+    cues_val = sanitize_contextual_cues(data.get("contextual_cues"))
+
+    result = {
         "cyberbullying": cb,
         "type": t_val,
         "emotion": e_val,
@@ -237,3 +275,6 @@ def sanitize_annotation_dict(
         "confidence": conf_val,
         "explanation": exp_val,
     }
+    if cues_val:
+        result["contextual_cues"] = cues_val
+    return result

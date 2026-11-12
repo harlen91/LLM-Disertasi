@@ -42,14 +42,34 @@ from core.schema import (
     validate_annotation_record,
 )
 from core.data_understanding import (
+    CONTEXTUAL_EVIDENCE_SCHEMA,
     TOTAL_VECTOR_DIM,
     clean_and_normalize_social_text,
-    extract_teacher_annotation_features,
+    extract_contextual_evidence_vector,
     get_teacher_feature_names,
     get_teacher_feature_schema,
     format_structured_rationale,
 )
 from data_manager.dataset_handler import detect_ground_truth_column, detect_text_column
+
+CANDIDATE_GROUP_COLS = [
+    "group_id", "conversation_id", "thread_id", "post_id", "user_id", "author_id", "username"
+]
+
+
+def _detect_group_column(df: pd.DataFrame, preferred: Optional[str] = None) -> Optional[str]:
+    """Detects optional user/thread/conversation identifier column for group-aware splitting."""
+    if preferred and preferred in df.columns:
+        non_empty = df[preferred].dropna().astype(str).str.strip()
+        if (non_empty != "").sum() > 0:
+            return preferred
+    lower_map = {str(c).lower().strip(): c for c in df.columns}
+    for cand in CANDIDATE_GROUP_COLS:
+        if cand in lower_map:
+            col = lower_map[cand]
+            if df[col].dropna().astype(str).str.strip().ne("").sum() > 0:
+                return col
+    return None
 
 
 def clean_text(text: str) -> str:
@@ -149,15 +169,20 @@ def verify_no_cross_split_leakage(
     val_df: pd.DataFrame,
     test_df: pd.DataFrame,
     text_col: str = "comment_normalized",
+    group_col: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Memastikan tidak ada komentar yang sama (raw maupun normalized) di antara train, val, dan test."""
+    """Memastikan tidak ada komentar yang sama (raw/normalized) atau group ID di antara train, val, dan test."""
     def _norm_set(frame: pd.DataFrame, col: str) -> set:
         if col not in frame.columns:
             return set()
         return set(frame[col].fillna("").astype(str).str.strip().str.lower()) - {""}
 
     results = {}
-    for col in [c for c in ["comment", text_col] if c in train_df.columns]:
+    check_cols = [c for c in ["comment", text_col] if c in train_df.columns]
+    if group_col and group_col in train_df.columns:
+        check_cols.append(group_col)
+
+    for col in check_cols:
         tr_s = _norm_set(train_df, col)
         va_s = _norm_set(val_df, col)
         te_s = _norm_set(test_df, col)
@@ -178,6 +203,94 @@ def verify_no_cross_split_leakage(
     return results
 
 
+def _build_composite_stratify_labels(df: pd.DataFrame) -> np.ndarray:
+    """
+    Membangun label stratifikasi komposit berbasis pseudo-label (`label` + `target_implicit_level`)
+    bila setiap strata memiliki minimal >= 4 sampel; jika tidak, fallback ke `label` biner.
+    """
+    if "target_implicit_level" in df.columns:
+        comp = df["label"].astype(str) + "__" + df["target_implicit_level"].astype(str)
+        counts = comp.value_counts()
+        if (counts >= 4).all() and len(counts) > 1:
+            return comp.values
+    return df["label"].values
+
+
+def _split_train_val_test_indices(
+    df: pd.DataFrame,
+    val_ratio: float,
+    test_ratio: float,
+    random_state: int,
+    group_col: Optional[str] = None,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, str]:
+    """
+    Membagi dataset secara konsisten:
+    - Group-aware stratified split apabila identitas pengguna/percakapan (`group_col`) tersedia.
+    - Stratified split berbasis pseudo-label jika tidak ada `group_col`.
+    """
+    from sklearn.model_selection import train_test_split
+
+    indices = np.arange(len(df))
+    strat_labels = _build_composite_stratify_labels(df)
+
+    if group_col and group_col in df.columns:
+        groups = df[group_col].fillna("").astype(str).str.strip()
+        if (groups != "").all() and groups.nunique() >= 5:
+            rng = np.random.RandomState(random_state)
+            group_stats = (
+                pd.DataFrame({"group": groups, "label": df["label"].values, "idx": indices})
+                .groupby("group", sort=False)
+                .agg(size=("idx", "count"), pos_rate=("label", "mean"))
+                .reset_index()
+            )
+            group_stats["_rand"] = rng.rand(len(group_stats))
+            group_stats = group_stats.sort_values(by=["pos_rate", "size", "_rand"]).reset_index(drop=True)
+
+            target_train = (1.0 - val_ratio - test_ratio) * len(df)
+            target_val = val_ratio * len(df)
+            target_test = test_ratio * len(df)
+
+            buckets: Dict[str, List[str]] = {"train": [], "val": [], "test": []}
+            bucket_sizes = {"train": 0, "val": 0, "test": 0}
+            targets = {"train": target_train, "val": target_val, "test": target_test}
+
+            for _, grow in group_stats.iterrows():
+                gname = str(grow["group"])
+                gsize = int(grow["size"])
+                deficits = {b: (targets[b] - bucket_sizes[b]) / max(1.0, targets[b]) for b in ("train", "val", "test")}
+                chosen = max(deficits.keys(), key=lambda b: (deficits[b], b == "train"))
+                buckets[chosen].append(gname)
+                bucket_sizes[chosen] += gsize
+
+            g2b = {g: b for b, gs in buckets.items() for g in gs}
+            split_assign = groups.map(g2b)
+            train_idx = indices[(split_assign == "train").values]
+            val_idx = indices[(split_assign == "val").values]
+            test_idx = indices[(split_assign == "test").values]
+            if len(train_idx) > 0 and len(val_idx) > 0 and len(test_idx) > 0:
+                return train_idx, val_idx, test_idx, f"group_aware_stratified({group_col})"
+
+    train_idx, temp_idx = train_test_split(
+        indices,
+        test_size=(val_ratio + test_ratio),
+        random_state=random_state,
+        stratify=strat_labels,
+    )
+    relative_test_ratio = test_ratio / (val_ratio + test_ratio)
+    temp_strat = strat_labels[temp_idx]
+    val_counts = pd.Series(temp_strat).value_counts()
+    if (val_counts < 2).any():
+        temp_strat = df["label"].values[temp_idx]
+    val_idx, test_idx = train_test_split(
+        temp_idx,
+        test_size=relative_test_ratio,
+        random_state=random_state,
+        stratify=temp_strat,
+    )
+    strat_kind = "stratified_composite_pseudo_label" if len(np.unique(strat_labels)) > 2 else "stratified_binary_pseudo_label"
+    return train_idx, val_idx, test_idx, strat_kind
+
+
 def curate_and_normalize(
     input_csv: Path,
     output_csv: Path,
@@ -188,13 +301,17 @@ def curate_and_normalize(
     random_state: int = DEFAULT_RANDOM_SEED,
     human_ground_truth_col: Optional[str] = None,
     allow_mock_rows: bool = False,
+    group_col: Optional[str] = None,
 ) -> pd.DataFrame:
     """
-    Pipeline kurasi data end-to-end dengan pemisahan ketat ground truth vs anotasi LLM,
-    validasi kualitas, deduplikasi ternormalisasi, dan verifikasi bebas kebocoran split.
+    Pipeline kurasi data berbasis kebijakan LLM Pseudo-Labels:
+    - Berkas mentah tidak diubah.
+    - Pseudo-label LLM (`target_*`) dipisahkan tegas dari representasi bukti kontekstual 33D (Stream B).
+    - Seluruh baris yang gagal/invalid dicatat lengkap alasannya di `failed_annotations_log.json`.
+    - Pembagian train/val/test menggunakan stratified / group-aware split dengan verifikasi 0 overlap.
     """
     print("=" * 72)
-    print("🚀 MEMULAI PIPELINE KURASI & VALIDASI DATASET IICD")
+    print("🚀 MEMULAI PIPELINE KURASI & VALIDASI DATASET IICD (PSEUDO-LABEL POLICY)")
     print("=" * 72)
     print(f"📂 Berkas Input (Read-Only) : {input_csv}")
     print(f"🎯 Berkas Output            : {output_csv}\n")
@@ -209,10 +326,16 @@ def curate_and_normalize(
 
     gt_col = human_ground_truth_col if (human_ground_truth_col and human_ground_truth_col in df_raw.columns) else detect_ground_truth_column(df_raw)
     has_human_gt = gt_col is not None
+    detected_group_col = _detect_group_column(df_raw, preferred=group_col)
 
     raw_audit = audit_dataset_quality(df_raw, text_col=text_col, human_gt_col=gt_col)
     print(f"📊 Total baris mentah termuat : {raw_audit['total_rows']:,}")
-    print(f"🏷️ Sumber Label Target        : {raw_audit['label_source']}" + (f" (kolom '{gt_col}')" if has_human_gt else " (BELUM ADA ground truth manusia independen -> pseudo-labeled LLM)"))
+    print(
+        f"🏷️ Kebijakan Supervisi       : {raw_audit['label_source']}"
+        + (f" (kolom referensi opsional '{gt_col}')" if has_human_gt else " (Supervisi utama menggunakan LLM-generated pseudo-labels)")
+    )
+    if detected_group_col:
+        print(f"👥 Group-Aware Split Aktif    : kolom `{detected_group_col}` terdeteksi")
     if "sentiment" in df_raw.columns and not has_human_gt:
         print("   ℹ️ Kolom 'sentiment' bawaan terdeteksi namun TIDAK dijadikan ground truth cyberbullying karena bukan label cyberbullying manusia tervalidasi.")
 
@@ -252,6 +375,33 @@ def curate_and_normalize(
     )
 
     drop_mask = error_mask | mock_mask | invalid_cb_mask | broken_exp_mask | invalid_comment_mask
+
+    # Catat seluruh baris gagal anotasi/validasi beserta alasannya
+    failed_records: List[Dict[str, Any]] = []
+    for raw_idx, is_dropped in drop_mask.items():
+        if not bool(is_dropped):
+            continue
+        reasons = []
+        if bool(error_mask.loc[raw_idx]):
+            reasons.append(f"error_col:{str(df_raw.loc[raw_idx, 'error'])[:120]}")
+        if bool(mock_mask.loc[raw_idx]):
+            reasons.append("mock_simulation")
+        if bool(invalid_cb_mask.loc[raw_idx]):
+            reasons.append(f"invalid_cyberbullying:{cb_col.loc[raw_idx]}")
+        if bool(broken_exp_mask.loc[raw_idx]):
+            reasons.append("json_parse_error_in_explanation")
+        if bool(invalid_comment_mask.loc[raw_idx]):
+            reasons.append("empty_or_short_comment")
+        failed_records.append(
+            {
+                "raw_row_index": int(raw_idx),
+                "comment_preview": str(df_raw.loc[raw_idx, text_col])[:100],
+                "reasons": reasons,
+                "llm_model": str(df_raw.loc[raw_idx].get("llm_model", "")).strip(),
+                "prompt_version": str(df_raw.loc[raw_idx].get("prompt_version", "")).strip(),
+            }
+        )
+
     df_filtered = df_raw[~drop_mask].copy().reset_index(drop=True)
 
     print(
@@ -261,11 +411,11 @@ def curate_and_normalize(
     )
     print(f"  ✅ Lolos filter awal             : {len(df_filtered):,} baris")
 
-    # 2. Normalisasi, Pemisahan Kolom Ground Truth vs LLM Prediction, & Teacher Vector (33D)
+    # 2. Normalisasi, Pemisahan Pseudo-Labels vs Bukti Kontekstual 33D Non-Target
     cleaned_records: List[Dict[str, Any]] = []
     vector_list: List[np.ndarray] = []
 
-    for _, row in df_filtered.iterrows():
+    for f_idx, row in df_filtered.iterrows():
         raw_comment = clean_text(str(row[text_col]))
         norm_comment = clean_and_normalize_social_text(
             raw_comment,
@@ -274,6 +424,15 @@ def curate_and_normalize(
             reduce_elongation=True,
         )
         if len(norm_comment.strip()) < 2:
+            failed_records.append(
+                {
+                    "raw_row_index": int(f_idx),
+                    "comment_preview": raw_comment[:100],
+                    "reasons": ["empty_after_normalization"],
+                    "llm_model": str(row.get("llm_model", "")).strip(),
+                    "prompt_version": str(row.get("prompt_version", "")).strip(),
+                }
+            )
             continue
 
         row_dict = {
@@ -285,30 +444,27 @@ def curate_and_normalize(
             "severity": row.get("severity", ""),
             "confidence": row.get("confidence", None),
             "explanation": clean_text(str(row.get("explanation", ""))) if pd.notna(row.get("explanation")) else "",
+            "contextual_cues": row.get("contextual_cues", None),
         }
         sanitized = sanitize_annotation_dict(row_dict, preserve_missing=True)
 
-        # Ekstraksi Teacher Features 33D strictly from `llm_*` annotations
-        llm_record = {
-            "llm_cyberbullying": sanitized["cyberbullying"],
-            "llm_type": sanitized["type"],
-            "llm_emotion": sanitized["emotion"],
-            "llm_cultural_context": sanitized["cultural_context"],
-            "llm_implicit_level": sanitized["implicit_level"],
-            "llm_severity": sanitized["severity"],
-            "llm_confidence": sanitized["confidence"],
-            "llm_explanation": sanitized["explanation"],
+        # ANTI-LEAKAGE: Stream B HANYA menerima bukti kontekstual/rasional & confidence (tanpa label target)
+        evidence_input = {
+            "comment": raw_comment,
+            "comment_normalized": norm_comment,
+            "explanation": sanitized["explanation"],
+            "confidence": sanitized["confidence"],
+            "contextual_cues": sanitized.get("contextual_cues"),
         }
-        vec_33 = extract_teacher_annotation_features(llm_record)
+        vec_33 = extract_contextual_evidence_vector(evidence_input, text=raw_comment)
         vector_list.append(vec_33)
 
-        # Tentukan Target Labels (strictly from human GT when available; else pseudo-labeled LLM)
+        # Tentukan Target Labels (LLM pseudo-labels secara default; atau kolom referensi opsional jika eksplisit diberikan)
         if has_human_gt:
             gt_bin = normalize_binary_target(row.get(gt_col))
             if gt_bin is None:
                 continue
             target_cb = "YES" if gt_bin == 1 else "NO"
-            # Human sub-labels only if explicitly provided in human_* columns, otherwise MISSING_LABEL (-100 masked)
             target_type = str(row.get("human_type", MISSING_LABEL)).strip().upper()
             target_emotion = str(row.get("human_emotion", MISSING_LABEL)).strip().upper()
             target_culture = str(row.get("human_cultural_context", MISSING_LABEL)).strip().upper()
@@ -327,45 +483,57 @@ def curate_and_normalize(
             target_severity = sanitized["severity"]
             label_source = "pseudo_labeled_llm"
 
+        llm_record = {
+            "llm_cyberbullying": sanitized["cyberbullying"],
+            "llm_type": sanitized["type"],
+            "llm_emotion": sanitized["emotion"],
+            "llm_cultural_context": sanitized["cultural_context"],
+            "llm_implicit_level": sanitized["implicit_level"],
+            "llm_severity": sanitized["severity"],
+            "llm_confidence": sanitized["confidence"],
+            "llm_explanation": sanitized["explanation"],
+        }
         structured_rat = format_structured_rationale(llm_record)
 
-        cleaned_records.append(
-            {
-                "comment": raw_comment,
-                "comment_normalized": norm_comment,
-                # Explicit separation: target labels vs LLM predictions
-                "target_source": label_source,
-                "target_cyberbullying": target_cb,
-                "label": int(gt_bin),
-                "target_type": target_type if target_type in VALID_TYPES else MISSING_LABEL,
-                "target_emotion": target_emotion if target_emotion in VALID_EMOTIONS else MISSING_LABEL,
-                "target_cultural_context": target_culture if target_culture in VALID_CULTURAL_CONTEXTS else MISSING_LABEL,
-                "target_implicit_level": target_implicit if target_implicit in VALID_IMPLICIT_LEVELS else MISSING_LABEL,
-                "target_severity": target_severity if target_severity in VALID_SEVERITIES else MISSING_LABEL,
-                # LLM teacher predictions (distinct from target_*)
-                "llm_cyberbullying": sanitized["cyberbullying"],
-                "llm_type": sanitized["type"],
-                "llm_emotion": sanitized["emotion"],
-                "llm_cultural_context": sanitized["cultural_context"],
-                "llm_implicit_level": sanitized["implicit_level"],
-                "llm_severity": sanitized["severity"],
-                "llm_confidence": sanitized["confidence"] if sanitized["confidence"] is not None else np.nan,
-                "llm_explanation": sanitized["explanation"],
-                # Backward-compatible columns used by downstream analytics & XAI UI
-                "cyberbullying": target_cb,
-                "type": target_type if target_type in VALID_TYPES else MISSING_LABEL,
-                "emotion": target_emotion if target_emotion in VALID_EMOTIONS else MISSING_LABEL,
-                "cultural_context": target_culture if target_culture in VALID_CULTURAL_CONTEXTS else MISSING_LABEL,
-                "implicit_level": target_implicit if target_implicit in VALID_IMPLICIT_LEVELS else MISSING_LABEL,
-                "severity": target_severity if target_severity in VALID_SEVERITIES else MISSING_LABEL,
-                "confidence": sanitized["confidence"] if sanitized["confidence"] is not None else np.nan,
-                "explanation": sanitized["explanation"],
-                "structured_rationale": structured_rat,
-                "llm_model": str(row.get("llm_model", "")).strip() or "unspecified",
-                "prompt_version": str(row.get("prompt_version", "")).strip() or "legacy",
-                "annotation_source": str(row.get("annotation_source", "")).strip() or "sumopod_api",
-            }
-        )
+        record_out = {
+            "comment": raw_comment,
+            "comment_normalized": norm_comment,
+            # Explicit separation: pseudo-label targets vs LLM knowledge evidence
+            "target_source": label_source,
+            "target_cyberbullying": target_cb,
+            "label": int(gt_bin),
+            "target_type": target_type if target_type in VALID_TYPES else MISSING_LABEL,
+            "target_emotion": target_emotion if target_emotion in VALID_EMOTIONS else MISSING_LABEL,
+            "target_cultural_context": target_culture if target_culture in VALID_CULTURAL_CONTEXTS else MISSING_LABEL,
+            "target_implicit_level": target_implicit if target_implicit in VALID_IMPLICIT_LEVELS else MISSING_LABEL,
+            "target_severity": target_severity if target_severity in VALID_SEVERITIES else MISSING_LABEL,
+            # LLM teacher outputs & contextual metadata
+            "llm_cyberbullying": sanitized["cyberbullying"],
+            "llm_type": sanitized["type"],
+            "llm_emotion": sanitized["emotion"],
+            "llm_cultural_context": sanitized["cultural_context"],
+            "llm_implicit_level": sanitized["implicit_level"],
+            "llm_severity": sanitized["severity"],
+            "llm_confidence": sanitized["confidence"] if sanitized["confidence"] is not None else np.nan,
+            "llm_explanation": sanitized["explanation"],
+            # Backward-compatible columns used by downstream analytics & UI
+            "cyberbullying": target_cb,
+            "type": target_type if target_type in VALID_TYPES else MISSING_LABEL,
+            "emotion": target_emotion if target_emotion in VALID_EMOTIONS else MISSING_LABEL,
+            "cultural_context": target_culture if target_culture in VALID_CULTURAL_CONTEXTS else MISSING_LABEL,
+            "implicit_level": target_implicit if target_implicit in VALID_IMPLICIT_LEVELS else MISSING_LABEL,
+            "severity": target_severity if target_severity in VALID_SEVERITIES else MISSING_LABEL,
+            "confidence": sanitized["confidence"] if sanitized["confidence"] is not None else np.nan,
+            "explanation": sanitized["explanation"],
+            "structured_rationale": structured_rat,
+            "llm_model": str(row.get("llm_model", "")).strip() or "unspecified",
+            "prompt_version": str(row.get("prompt_version", "")).strip() or "legacy",
+            "annotated_at": str(row.get("annotated_at", "")).strip() or "",
+            "annotation_source": str(row.get("annotation_source", "")).strip() or "sumopod_api",
+        }
+        if detected_group_col:
+            record_out[detected_group_col] = row.get(detected_group_col, "")
+        cleaned_records.append(record_out)
 
     if not cleaned_records:
         raise ValueError("Tidak ada baris valid yang tersisa setelah kurasi.")
@@ -413,33 +581,40 @@ def curate_and_normalize(
             ensure_ascii=False,
         )
 
+    failed_log_path = output_csv.parent / "failed_annotations_log.json"
+    with open(failed_log_path, "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "total_failed_rows": len(failed_records),
+                "input_source": str(input_csv),
+                "records": failed_records,
+            },
+            f,
+            indent=2,
+            ensure_ascii=False,
+        )
+
     split_info: Dict[str, Any] = {}
     if perform_split:
-        from sklearn.model_selection import train_test_split
-
-        indices = np.arange(len(df_cleaned))
-        labels = df_cleaned["label"].values
-
-        train_idx, temp_idx = train_test_split(
-            indices,
-            test_size=(val_ratio + test_ratio),
+        train_idx, val_idx, test_idx, split_strategy = _split_train_val_test_indices(
+            df_cleaned,
+            val_ratio=val_ratio,
+            test_ratio=test_ratio,
             random_state=random_state,
-            stratify=labels,
-        )
-        relative_test_ratio = test_ratio / (val_ratio + test_ratio)
-        val_idx, test_idx = train_test_split(
-            temp_idx,
-            test_size=relative_test_ratio,
-            random_state=random_state,
-            stratify=labels[temp_idx],
+            group_col=detected_group_col,
         )
 
         train_df = df_cleaned.iloc[train_idx].reset_index(drop=True)
         val_df = df_cleaned.iloc[val_idx].reset_index(drop=True)
         test_df = df_cleaned.iloc[test_idx].reset_index(drop=True)
 
-        leakage_report = verify_no_cross_split_leakage(train_df, val_df, test_df)
-        print(f"  ✅ Verifikasi Zero Cross-Split Leakage OK: {leakage_report}")
+        leakage_report = verify_no_cross_split_leakage(
+            train_df,
+            val_df,
+            test_df,
+            group_col=detected_group_col,
+        )
+        print(f"  ✅ Strategi Split ({split_strategy}) & Zero Leakage OK: {leakage_report}")
 
         train_df.to_csv(output_csv.parent / "train.csv", index=False, encoding="utf-8")
         val_df.to_csv(output_csv.parent / "val.csv", index=False, encoding="utf-8")
@@ -451,6 +626,8 @@ def curate_and_normalize(
 
         split_info = {
             "random_state": random_state,
+            "strategy": split_strategy,
+            "group_col": detected_group_col,
             "train_size": int(len(train_df)),
             "val_size": int(len(val_df)),
             "test_size": int(len(test_df)),
@@ -459,22 +636,31 @@ def curate_and_normalize(
 
     # Simpan dataset manifest untuk reproducibility & model manifest linkage
     csv_sha = hashlib.sha256(output_csv.read_bytes()).hexdigest()[:12]
+    llm_models_used = sorted(df_cleaned["llm_model"].dropna().astype(str).unique().tolist())
+    prompt_versions_used = sorted(df_cleaned["prompt_version"].dropna().astype(str).unique().tolist())
     dataset_manifest = {
         "dataset_version": f"iicd-curated-{csv_sha}",
         "curated_at": datetime.now(timezone.utc).isoformat(),
         "input_source": str(input_csv),
         "output_dataset": str(output_csv),
+        "supervision_policy": "llm_generated_pseudo_labels",
         "has_human_ground_truth": has_human_gt,
         "label_source": "human_ground_truth" if has_human_gt else "pseudo_labeled_llm",
-        "pseudo_labeled_warning": (
-            None
-            if has_human_gt
-            else "Dataset belum memiliki ground truth manusia independen; seluruh metrik mengevaluasi kesepakatan/distilasi terhadap pseudo-label LLM."
+        "confidence_policy": "raw_llm_confidence_uncalibrated",
+        "stream_b_representation": "non_leaky_33d_contextual_evidence_cues",
+        "llm_models_used": llm_models_used,
+        "prompt_versions_used": prompt_versions_used,
+        "evaluation_note": (
+            "Evaluasi mengukur kesepakatan/konsistensi model terhadap pseudo-label yang dihasilkan LLM "
+            "(tanpa ketergantungan pada human ground truth)."
         ),
         "raw_audit": raw_audit,
+        "failed_annotations_count": len(failed_records),
+        "failed_annotations_log": str(failed_log_path),
         "dedup_dropped": int(dedup_dropped),
         "final_rows": int(len(df_cleaned)),
         "teacher_vector_dim": TOTAL_VECTOR_DIM,
+        "contextual_cue_schema": CONTEXTUAL_EVIDENCE_SCHEMA,
         "class_distribution": {
             k: {str(ck): int(cv) for ck, cv in v.items()} for k, v in class_dist.items()
         },
@@ -503,7 +689,8 @@ def main():
         default=str(PROJECT_DIR / "output" / "final" / "iicd_cleaned_indobertweet.csv"),
         help="Path tujuan berkas dataset bersih",
     )
-    parser.add_argument("--ground-truth-col", type=str, default=None, help="Opsional: nama kolom ground truth manusia tervalidasi")
+    parser.add_argument("--ground-truth-col", type=str, default=None, help="Opsional: nama kolom referensi sekunder terpisah")
+    parser.add_argument("--group-col", type=str, default=None, help="Opsional: nama kolom group/user/thread untuk group-aware split")
     parser.add_argument("--seed", type=int, default=DEFAULT_RANDOM_SEED)
     parser.add_argument("--no-split", action="store_true", help="Jangan buat train/val/test split otomatis")
 
@@ -514,6 +701,7 @@ def main():
         perform_split=not args.no_split,
         random_state=args.seed,
         human_ground_truth_col=args.ground_truth_col,
+        group_col=args.group_col,
     )
 
 

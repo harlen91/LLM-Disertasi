@@ -120,6 +120,14 @@ class MockEngine:
                 severity = "MEDIUM"
                 implicitness = "E0" if any(w in p_lower for w in ["babi", "anjing", "bangsat", "bajingan"]) else "E1"
 
+            import json as _json
+            mock_cues = {
+                "linguistic": {"derogatory_lexical": 0.8 if (is_ins or is_bsh) else 0.4, "metaphor_simile": 0.3, "rhetorical_punct": 0.4 if "?" in p_lower or "!" in p_lower else 0.1},
+                "cultural": {"appearance_norm": 0.85 if is_bsh else 0.0, "competence_norm": 0.8 if cultural == "INT" else 0.0, "status_hierarchy": 0.75 if cultural == "STA" else 0.0, "regional_dialect": 0.2, "family_kinship": 0.0, "gender_identity": 0.6 if cultural == "GEN" else 0.0},
+                "emotional": {"hostility_aggression": 0.85 if emotion == "ANG" else 0.3, "derision_ridicule": 0.8 if emotion == "MOCK" else 0.1, "disgust_contempt": 0.2, "humiliation_shaming": 0.7 if is_shm or is_bsh else 0.1, "sadness_distress": 0.1},
+                "pragmatic": {"irony_sarcasm": 0.6 if implicitness != "E0" else 0.1, "presupposition_insinuation": 0.7 if implicitness != "E0" else 0.2, "indirect_advice": 0.3 if "?" in p_lower else 0.0, "benign_supportive": 0.0},
+                "contextual": {"direct_addressee": 0.7 if "@" in p_lower or "lu" in p_lower or "kamu" in p_lower else 0.3, "public_stage": 0.5, "evaluative_judgment": 0.85, "harm_impact_evidence": 0.8 if severity == "HIGH" else 0.5},
+            }
             return f"""{{
   "cyberbullying": "YES",
   "type": "{b_type}",
@@ -128,7 +136,8 @@ class MockEngine:
   "implicit_level": "{implicitness}",
   "severity": "{severity}",
   "confidence": 0.85,
-  "explanation": "{explanation}"
+  "explanation": "{explanation}",
+  "contextual_cues": {_json.dumps(mock_cues)}
 }}"""
         return """{
   "cyberbullying": "NO",
@@ -138,7 +147,14 @@ class MockEngine:
   "implicit_level": "E0",
   "severity": "NONE",
   "confidence": 0.90,
-  "explanation": "[SIMULASI MOCK] Komentar bernada netral tanpa indikasi perundungan siber."
+  "explanation": "[SIMULASI MOCK] Komentar bernada netral tanpa indikasi perundungan siber.",
+  "contextual_cues": {
+    "linguistic": {"derogatory_lexical": 0.0, "metaphor_simile": 0.0, "rhetorical_punct": 0.1},
+    "cultural": {"appearance_norm": 0.0, "competence_norm": 0.0, "status_hierarchy": 0.0, "regional_dialect": 0.0, "family_kinship": 0.0, "gender_identity": 0.0},
+    "emotional": {"hostility_aggression": 0.0, "derision_ridicule": 0.0, "disgust_contempt": 0.0, "humiliation_shaming": 0.0, "sadness_distress": 0.0},
+    "pragmatic": {"irony_sarcasm": 0.0, "presupposition_insinuation": 0.0, "indirect_advice": 0.0, "benign_supportive": 0.9},
+    "contextual": {"direct_addressee": 0.2, "public_stage": 0.2, "evaluative_judgment": 0.1, "harm_impact_evidence": 0.0}
+  }
 }"""
 
     def generate_batch(
