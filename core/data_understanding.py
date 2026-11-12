@@ -9,7 +9,7 @@ Fitur Utama:
 2. Demultiplexing & Semantik Emoji Sarkas/Penghinaan ke Representasi Teks.
 3. Deteksi & Tagging Dialek Kedaerahan (Jawa, Sunda, Batak, Jaksel).
 4. Reduksi Elongasi Karakter & Pembersihan Mention Pengguna.
-5. Ekstraksi Vektor Probabilitas Taksonomi LLM (33 Dimensi) dari Hasil Anotasi LLaMA-3.
+5. Ekstraksi Vektor Probabilitas Taksonomi LLM (33 Dimensi) dari Hasil Anotasi SumoPod API.
 6. Pemformatan Teks Penalaran Terstruktur (Structured CoT Rationale) untuk Dual-Sequence Transformer.
 """
 
@@ -291,7 +291,7 @@ def clean_and_normalize_social_text(
 
 def extract_taxonomy_probability_vector(annotation_dict: Dict[str, Any]) -> np.ndarray:
     """
-    Mengekstrak vektor probabilitas taksonomi 33-dimensi dari anotasi LLaMA-3 (SumoPod):
+    Mengekstrak vektor probabilitas taksonomi 33-dimensi dari anotasi SumoPod LLM:
     - [0:2]   : Cyberbullying Binary ([NO, YES])
     - [2:11]  : Bullying Type (9 classes)
     - [11:17] : Emotion (6 classes)
@@ -410,7 +410,7 @@ def get_taxonomy_vector_feature_names() -> List[str]:
 
 def format_structured_rationale(annotation_dict: Dict[str, Any]) -> str:
     """
-    Memformat teks penalaran LLaMA-3 menjadi teks berstruktur ringkas
+    Memformat teks penalaran SumoPod LLM menjadi teks berstruktur ringkas
     untuk di-encode bersama teks komentar oleh Transformer Encoder:
     [CLS] komentar [SEP] rationale [SEP]
     """

@@ -1,22 +1,17 @@
-import os
 from pathlib import Path
 
 # Base Paths
 APP_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = APP_DIR.parent
-DEFAULT_CACHE_DIR = os.path.expanduser("~/.cache/huggingface/hub")
-DEFAULT_MODEL_NAME = "meta-llama/Meta-Llama-3-8B-Instruct"
 
 # SumoPod Gateway Configurations
 DEFAULT_SUMOPOD_BASE_URL = "https://api.sumopod.com/v1"
-DEFAULT_SUMOPOD_MODEL = "meta-llama/Meta-Llama-3-8B-Instruct"
+DEFAULT_SUMOPOD_MODEL = "deepseek-ai/DeepSeek-V3"
 SUMOPOD_POPULAR_MODELS = [
-    "meta-llama/Meta-Llama-3-8B-Instruct",
-    "meta-llama/Llama-3-8b-chat-hf",
-    "meta-llama/Llama-3.1-8B-Instruct",
     "deepseek-ai/DeepSeek-V3",
+    "gpt-4o-mini",
     "Qwen/Qwen2.5-7B-Instruct",
-    "gpt-4o-mini"
+    "meta-llama/Llama-3.1-8B-Instruct"
 ]
 
 # Default Dataset Path

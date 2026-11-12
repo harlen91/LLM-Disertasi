@@ -3,9 +3,9 @@ import json
 from typing import Dict, Any
 from .schema import sanitize_annotation_dict
 
-def extract_json_from_llama(output: str) -> Dict[str, Any]:
+def extract_json_from_response(output: str) -> Dict[str, Any]:
     """
-    Robust JSON extraction from LLaMA-3 text generation.
+    Robust JSON extraction from SumoPod LLM text generation.
     Handles:
     1. Markdown code blocks (```json ... ```)
     2. Unquoted numeric values (e.g. "confidence": 0.95)
@@ -108,3 +108,7 @@ def extract_json_from_llama(output: str) -> Dict[str, Any]:
         "explanation": f"JSON syntax error. Model response: {output[:200]}",
         "error": "Malformed JSON"
     }
+
+
+# Backward-compatible alias for legacy utilities
+extract_json_from_llama = extract_json_from_response

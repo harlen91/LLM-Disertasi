@@ -9,7 +9,7 @@ Fitur Utama:
 2. Identifikasi Kata Pemicu Cyberbullying (Positive Attributions) vs Kata Peredam/Netral (Negative Attributions).
 3. Generator Visualisasi HTML Berwarna (Heatmap Teks) yang aman di-render di Streamlit.
 4. Modul Penyelarasan Ganda (Dual-XAI Alignment): Menghitung tingkat konsistensi
-   antara fitur token SHAP kuantitatif dengan narasi penalaran CoT LLaMA-3 kualitatif.
+   antara fitur token SHAP kuantitatif dengan narasi penalaran CoT LLM (SumoPod API) kualitatif.
 """
 
 import re
@@ -192,7 +192,7 @@ def align_shap_with_cot(
     """
     Penyelarasan Ganda (Dual-XAI Alignment):
     Memeriksa apakah token-token dengan atribusi SHAP positif tertinggi
-    dijelaskan secara eksplisit dalam narasi penalaran CoT LLaMA-3.
+    dijelaskan secara eksplisit dalam narasi penalaran CoT LLM (SumoPod API).
     """
     if not cot_explanation or not shap_result.get("top_positive_tokens"):
         return {
@@ -218,7 +218,7 @@ def align_shap_with_cot(
 
     summary = (
         f"Ditemukan {len(aligned)} dari {total_pos} kata kunci SHAP pemicu ({', '.join(aligned) if aligned else 'tidak ada'}) "
-        f"yang dikonfirmasi oleh penalaran kultural LLaMA-3 (Tingkat Keselarasan: {alignment_score}%)."
+        f"yang dikonfirmasi oleh penalaran kultural SumoPod LLM (Tingkat Keselarasan: {alignment_score}%)."
     )
 
     return {

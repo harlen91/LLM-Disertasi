@@ -4,26 +4,23 @@ import time
 from pathlib import Path
 from datetime import datetime
 
-from config import DEFAULT_DATASET_PATH, CHECKPOINTS_DIR
+from config import DEFAULT_DATASET_PATH, CHECKPOINTS_DIR, DEFAULT_SUMOPOD_MODEL
 from data_manager.dataset_handler import load_dataset_file, detect_text_column
 from data_manager.checkpoint_manager import save_checkpoint, load_checkpoint, get_checkpoint_filepath
-from core.model_engine import run_single_annotation, run_batch_annotation_step, MockEngine
+from core.model_engine import run_single_annotation, run_batch_annotation_step
 
 def render_batch_annotation_page():
     st.markdown("## ⚡ Batch Annotation Pipeline")
-    st.markdown("Anotasi dataset riset dalam jumlah besar dengan pengaturan **Optimasi Kecepatan** (*Throughput*), **Auto-Checkpointing**, dan **Cooldown Throttling**.")
+    st.markdown("Anotasi dataset riset dalam jumlah besar melalui **SumoPod AI Gateway** dengan pengaturan **Konkurensi API**, **Auto-Checkpointing**, dan **Cooldown Throttling**.")
 
     # Check active engine
     engine = st.session_state.get("active_engine")
     is_mock = getattr(engine, "is_mock", True) if engine else True
-    backend_type = getattr(engine, "backend_type", "mock" if is_mock else "local")
 
     if is_mock:
-        st.warning("⚠️ Sedang berjalan dalam **Simulation/Mock Mode**. Untuk menganotasi riil, aktifkan **SumoPod AI Gateway** atau **Local LLaMA-3** di tab **Pengaturan & Model**.")
-    elif backend_type == "sumopod":
-        st.success(f"🌐 **SumoPod AI Gateway Aktif**: Menggunakan model `{getattr(engine, 'model_name', 'LLaMA-3')}` via Cloud API. Siap untuk anotasi batch!")
+        st.warning("⚠️ Sedang berjalan dalam **Mode Simulasi / Mock Fallback**. Untuk menganotasi menggunakan LLM riil, isi **SumoPod API Key** di tab **Pengaturan & Model**.")
     else:
-        st.success("🧠 **Model Lokal Aktif**: Meta LLaMA-3 8B Instruct (HuggingFace Cache Lokal) siap digunakan untuk anotasi batch!")
+        st.success(f"🌐 **SumoPod AI Gateway Aktif**: Menggunakan model `{getattr(engine, 'model_name', DEFAULT_SUMOPOD_MODEL)}` via Cloud API. Siap untuk anotasi batch!")
 
     # 1. Dataset Selection
     st.markdown("### 1. Sumber Dataset")
@@ -101,25 +98,25 @@ def render_batch_annotation_page():
     # 4. Speed & Execution Controls
     st.markdown("### 2. Pengaturan Kecepatan & Eksekusi Batch")
     
-    with st.expander("🚀 Panel Konfigurasi Kecepatan & Hardware (Tuning Throughput)", expanded=True):
-        col_speed1, col_speed2, col_speed3, col_speed4 = st.columns(4)
+    with st.expander("🚀 Panel Konfigurasi Kecepatan SumoPod API (Tuning Throughput)", expanded=True):
+        col_speed1, col_speed2, col_speed3 = st.columns(3)
         
         with col_speed1:
             batch_size = st.selectbox(
-                "⚡ Ukuran Batch (Batch Size):",
+                "⚡ Ukuran Batch / Concurrent Workers:",
                 [1, 2, 4, 8],
                 index=1,
-                help="Memproses beberapa komentar secara paralel dalam 1 forward pass GPU/MPS. Nilai 2 atau 4 mempercepat inferensi hingga 2x-3x."
+                help="Mengirim beberapa request SumoPod API secara paralel dalam 1 chunk untuk mempercepat proses anotasi."
             )
         
         with col_speed2:
             max_tok = st.number_input(
-                "✂️ Max New Tokens:",
+                "✂️ Max Output Tokens:",
                 min_value=80,
                 max_value=400,
                 value=160,
                 step=20,
-                help="Panjang token output. Skema JSON butuh ~110 token. Membatasi ke 160 memangkas waktu hingga 50% dibanding default 300."
+                help="Batas panjang token respons dari API. Skema JSON riset umumnya membutuhkan ~110-160 token."
             )
             
         with col_speed3:
@@ -129,14 +126,7 @@ def render_batch_annotation_page():
                 max_value=2.0,
                 value=0.0,
                 step=0.1,
-                help="Jeda istirahat antar batch. Gunakan 0.0s untuk kecepatan maksimal, atau 0.2s-0.5s untuk mencegah laptop panas (thermal throttle)."
-            )
-            
-        with col_speed4:
-            early_stop_json = st.checkbox(
-                "🛑 Early Stop pada '}'",
-                value=True,
-                help="Menghentikan generasi model segera setelah kurung penutup JSON '}' terbentuk, mencegah generasi token kosong."
+                help="Jeda istirahat antar batch request untuk menghindari rate limit pada SumoPod API."
             )
 
     c1, c2, c3 = st.columns(3)
@@ -211,8 +201,7 @@ def render_batch_annotation_page():
                         text=chunk_texts[0],
                         system_prompt=sys_prompt,
                         max_new_tokens=max_tok,
-                        temperature=temp,
-                        early_stop_json=early_stop_json
+                        temperature=temp
                     )]
                 else:
                     res_list = run_batch_annotation_step(
@@ -220,8 +209,7 @@ def render_batch_annotation_page():
                         texts=chunk_texts,
                         system_prompt=sys_prompt,
                         max_new_tokens=max_tok,
-                        temperature=temp,
-                        early_stop_json=early_stop_json
+                        temperature=temp
                     )
 
                 # Assign results back to dataframe

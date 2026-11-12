@@ -3,7 +3,7 @@ core/fusion_model.py
 --------------------
 Arsitektur PyTorch: Dual-Stream Hybrid Fusion Model
 Menggabungkan Transformer Encoder (IndoBERTweet / XLM-RoBERTa)
-dengan Vektor Representasi Pengetahuan LLM (SumoPod LLaMA-3 33-Dimensi)
+dengan Vektor Representasi Pengetahuan LLM (SumoPod API 33-Dimensi)
 melalui Gated Cross-Modality Fusion & 6 Multi-Task Classification Heads.
 
 Pilar Ilmiah:
@@ -154,7 +154,7 @@ class HybridFusionModel(nn.Module):
     """
     Arsitektur Hibrida Paralel:
     1. Stream A: Transformer Encoder (IndoBERTweet / XLM-R)
-    2. Stream B: SumoPod LLaMA-3 Probability Vector Extractor (33 Dimensi)
+    2. Stream B: SumoPod LLM Probability Vector Extractor (33 Dimensi)
     3. Lapisan Fusi: Gated Cross-Modality Fusion Layer
     4. 6 Multi-Task Classification Heads
     """

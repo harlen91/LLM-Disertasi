@@ -44,7 +44,7 @@ def list_existing_checkpoints() -> List[Dict[str, str]]:
         })
     return results
 
-def export_final_dataset(df: pd.DataFrame, base_filename: str = "IICD_LLaMA3_annotated") -> Dict[str, str]:
+def export_final_dataset(df: pd.DataFrame, base_filename: str = "IICD_SumoPod_annotated") -> Dict[str, str]:
     """Exports dataset to final directory in CSV and Excel formats."""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     clean_name = f"{base_filename}_{timestamp}"

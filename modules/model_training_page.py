@@ -25,6 +25,7 @@ from scripts.generate_dissertation_report import (
 )
 from scripts.train_hybrid_fusion import train_hybrid_pipeline
 from scripts.evaluate_dual_xai import evaluate_dual_xai_benchmark
+from config import DEFAULT_SUMOPOD_MODEL
 from core.fusion_model import load_hybrid_classifier, predict_hybrid_text
 from core.shap_explainer import HybridSHAPExplainer, align_shap_with_cot
 from core.model_engine import run_single_annotation
@@ -39,7 +40,7 @@ REPORT_DIR = PROJECT_DIR / "output" / "evaluation_report"
 def render_model_training_page():
     st.markdown("## 🤖 Fine-Tuning & Evaluasi Transformer IndoBERTweet")
     st.markdown(
-        "Latih model Transformer Encoder lokal (**IndoBERTweet**) menggunakan dataset hasil kurasi anotasi LLM SumoPod (LLaMA-3). "
+        "Latih model Transformer Encoder lokal (**IndoBERTweet**) menggunakan dataset hasil kurasi anotasi **SumoPod LLM API**. "
         "Menghasilkan model ringan berkecepatan tinggi (~20ms) dan metrik evaluasi lengkap untuk naskah disertasi."
     )
 
@@ -148,7 +149,7 @@ def render_model_training_page():
                     "Standard Cross-Entropy Loss"
                 ],
                 index=0,
-                help="Focal Loss meredam loss pada sampel mudah dan memperbesar penalti pada sampel batas/sulit, dipadukan dengan soft labels berbobot confidence LLaMA-3."
+                help="Focal Loss meredam loss pada sampel mudah dan memperbesar penalti pada sampel batas/sulit, dipadukan dengan soft labels berbobot confidence SumoPod LLM."
             )
         with col_opt2:
             st.caption("💡 **Optimalisasi**: Focal Loss + Normalisasi Teks terbukti menaikkan Macro-F1 dan menekan angka False Positives pada teks medsos Indonesia.")
@@ -163,7 +164,7 @@ def render_model_training_page():
                 "🔷 Single-Stream IndoBERTweet Baseline"
             ],
             index=0,
-            help="Dual-Stream Hybrid Fusion mengintegrasikan representasi leksikal kontekstual IndoBERTweet dengan penalaran multi-dimensi kultural & emosi dari SumoPod LLaMA-3 via Gated Cross-Modality Fusion."
+            help="Dual-Stream Hybrid Fusion mengintegrasikan representasi leksikal kontekstual IndoBERTweet dengan penalaran multi-dimensi kultural & emosi dari SumoPod LLM via Gated Cross-Modality Fusion."
         )
 
         # Tombol Mulai Training
@@ -458,7 +459,7 @@ def render_model_training_page():
                     <div style="background-color: #f1f5f9; border-left: 4px solid #4338ca; padding: 14px 18px; border-radius: 6px; margin-top: 10px;">
                         <strong style="color: #1e1b4b;">💡 Temuan Akademis Bab 4:</strong>
                         <p style="margin: 6px 0 0 0; font-size: 14px; color: #334155; line-height: 1.6;">
-                            Model <strong>Dual-Stream Hybrid Fusion</strong> berhasil menyeimbangkan representasi leksikal IndoBERTweet dengan penalaran kultural SumoPod LLaMA-3 (nilai gerbang fusi <code>z = {hyb_test.get('mean_gating_z', 0.466):.3f}</code>). 
+                            Model <strong>Dual-Stream Hybrid Fusion</strong> berhasil menyeimbangkan representasi leksikal IndoBERTweet dengan penalaran kultural SumoPod LLM (nilai gerbang fusi <code>z = {hyb_test.get('mean_gating_z', 0.466):.3f}</code>). 
                             Model ini tidak hanya meningkatkan akurasi deteksi perundungan siber, tetapi juga memprediksi taksonomi multi-dimensi secara simultan (Akurasi Tipe Bullying: <strong>{hyb_test.get('type_accuracy', 0)*100:.1f}%</strong>, Akurasi Emosi: <strong>{hyb_test.get('emotion_accuracy', 0)*100:.1f}%</strong>).
                         </p>
                     </div>
@@ -476,8 +477,8 @@ def render_model_training_page():
             st.markdown("---")
             col_dx_t, col_dx_b = st.columns([3, 1])
             with col_dx_t:
-                st.markdown("### 🔬 Evaluasi Empiris Dual-XAI: Keselarasan Token SHAP ⟷ LLaMA-3 CoT")
-                st.caption("Pilar Disertasi (Explainability): Mengukur konsistensi antara atribusi fitur token kuantitatif (SHAP) dan penalaran kualitatif (LLaMA-3 CoT) pada 150 sampel data uji independen.")
+                st.markdown("### 🔬 Evaluasi Empiris Dual-XAI: Keselarasan Token SHAP ⟷ SumoPod LLM CoT")
+                st.caption("Pilar Disertasi (Explainability): Mengukur konsistensi antara atribusi fitur token kuantitatif (SHAP) dan penalaran kualitatif (SumoPod LLM CoT) pada 150 sampel data uji independen.")
             with col_dx_b:
                 if st.button("🔄 Evaluasi Ulang Dual-XAI (150 Sampel)", use_container_width=True):
                     with st.spinner("Menghitung atribusi SHAP & keselarasan CoT di seluruh test set..."):
@@ -531,7 +532,7 @@ def render_model_training_page():
                     <div style="background-color: #fdf4ff; border-left: 4px solid #c026d3; padding: 14px 18px; border-radius: 6px; margin-top: 6px;">
                         <strong style="color: #701a75;">💡 Temuan Akademis Explainability (Bab 4):</strong>
                         <p style="margin: 6px 0 0 0; font-size: 14px; color: #4a044e; line-height: 1.6;">
-                            Hasil empiris membuktikan bahwa semakin tinggi tingkat keterbukaan ujaran (dari <strong>E0 = 32.8%</strong> ke <strong>E1 = 53.0%</strong> dan <strong>E2 = 100.0%</strong>), semakin tinggi keselarasan antara token berkontribusi SHAP dengan argumen penalaran LLaMA-3. Hal ini memvalidasi hipotesis disertasi: <em>ujaran perundungan tersirat memerlukan penalaran semantik kultural untuk dapat dijelaskan secara transparan</em>.
+                            Hasil empiris membuktikan bahwa semakin tinggi tingkat keterbukaan ujaran (dari <strong>E0 = 32.8%</strong> ke <strong>E1 = 53.0%</strong> dan <strong>E2 = 100.0%</strong>), semakin tinggi keselarasan antara token berkontribusi SHAP dengan argumen penalaran SumoPod LLM. Hal ini memvalidasi hipotesis disertasi: <em>ujaran perundungan tersirat memerlukan penalaran semantik kultural untuk dapat dijelaskan secara transparan</em>.
                         </p>
                     </div>
                     """,
@@ -595,13 +596,10 @@ def render_model_training_page():
         if "Dual-Stream" in model_play_choice:
             active_eng = st.session_state.get("active_engine")
             is_mock_eng = getattr(active_eng, "is_mock", True) if active_eng else True
-            b_type = getattr(active_eng, "backend_type", "mock" if is_mock_eng else "local")
             if is_mock_eng:
-                st.caption("ℹ️ **Backend LLM Stream: Mode Simulasi (Mock Engine)**. Menggunakan deteksi heuristik simulasi. Untuk penalaran kultural mendalam LLaMA-3, hubungkan API SumoPod di tab *Pengaturan & Model*.")
-            elif b_type == "sumopod":
-                st.caption(f"🌐 **Backend LLM Stream: SumoPod AI Gateway** (`{getattr(active_eng, 'model_name', 'LLaMA-3')}` aktif).")
+                st.caption("ℹ️ **Backend LLM Stream: Mode Simulasi (Mock Fallback)**. Menggunakan deteksi heuristik simulasi. Untuk penalaran kultural mendalam via SumoPod LLM, hubungkan API SumoPod di tab *Pengaturan & Model*.")
             else:
-                st.caption("🚀 **Backend LLM Stream: Local LLaMA-3 8B Instruct** aktif.")
+                st.caption(f"🌐 **Backend LLM Stream: SumoPod AI Gateway** (`{getattr(active_eng, 'model_name', DEFAULT_SUMOPOD_MODEL)}` aktif).")
 
         # Muat threshold optimal dari hasil evaluasi
         opt_th_default = 0.50
@@ -653,8 +651,7 @@ def render_model_training_page():
                                 text=test_input.strip(),
                                 system_prompt=sys_prompt,
                                 max_new_tokens=max_tok,
-                                temperature=temp,
-                                early_stop_json=True
+                                temperature=temp
                             )
 
                             # 2. Inferensi Hybrid
@@ -723,7 +720,7 @@ def render_model_training_page():
                                     st.markdown(f"🔴 **Kata Pemicu**: {', '.join(pos_t)}")
 
                             with col_cot:
-                                st.markdown("##### 💬 Chain-of-Thought Rationale (LLaMA-3)")
+                                st.markdown("##### 💬 Chain-of-Thought Rationale (SumoPod LLM)")
                                 st.markdown(
                                     f"""
                                     <div style="background-color: #f8fafc; border-left: 4px solid #3b82f6; padding: 14px 18px; border-radius: 6px; min-height: 110px;">

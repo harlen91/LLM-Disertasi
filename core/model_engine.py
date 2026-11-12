@@ -1,57 +1,63 @@
-import os
 import time
-import torch
-from typing import Tuple, Any, Optional, List, Dict
-from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig, StoppingCriteria, StoppingCriteriaList
+from concurrent.futures import ThreadPoolExecutor
+from typing import Tuple, Optional, List, Dict, Any, Union
+import requests
 
-from .prompt_templates import build_llama3_prompt
-from .parser import extract_json_from_llama
+from config import DEFAULT_SUMOPOD_BASE_URL, DEFAULT_SUMOPOD_MODEL
+from .prompt_templates import build_chat_messages
+from .parser import extract_json_from_response
 
 
-class JsonStopCriteria(StoppingCriteria):
-    """Stops generation as soon as JSON closing brace '}' is emitted."""
-    def __init__(self, tokenizer, prompt_lens: List[int]):
-        super().__init__()
-        self.tokenizer = tokenizer
-        self.prompt_lens = prompt_lens
+def _extract_user_text(prompt_or_messages: Union[str, List[Dict[str, str]]]) -> str:
+    """Extracts user message text from OpenAI-style messages or plain string prompts."""
+    if isinstance(prompt_or_messages, list):
+        user_parts = [
+            str(m.get("content", ""))
+            for m in prompt_or_messages
+            if isinstance(m, dict) and m.get("role") == "user"
+        ]
+        raw = "\n".join(user_parts) if user_parts else " ".join(str(m.get("content", "")) for m in prompt_or_messages if isinstance(m, dict))
+    else:
+        raw = str(prompt_or_messages or "")
 
-    def __call__(self, input_ids: torch.LongTensor, scores: torch.FloatTensor, **kwargs) -> bool:
-        # Check if all sequences have emitted closing brace '}'
-        all_closed = True
-        for i, seq in enumerate(input_ids):
-            start = self.prompt_lens[i] if i < len(self.prompt_lens) else self.prompt_lens[0]
-            gen_text = self.tokenizer.decode(seq[start:], skip_special_tokens=True).strip()
-            if not ("}" in gen_text and gen_text.endswith("}")):
-                all_closed = False
-                break
-        return all_closed
+    if "Text:\n" in raw and "\n\nTaxonomy:" in raw:
+        return raw.split("Text:\n", 1)[1].split("\n\nTaxonomy:", 1)[0]
+    return raw
 
 
 class MockEngine:
     """
-    Simulation engine for quick testing, development, and UI demonstrations
-    without loading 8B parameters into memory.
+    Safe fallback simulation engine when SumoPod API Key is not configured yet,
+    for quick UI prototyping and offline demonstrations.
     """
+
     def __init__(self):
         self.device = "mock"
         self.is_mock = True
+        self.backend_type = "mock"
 
-    def generate(self, prompt: str, max_new_tokens: int = 160, temperature: float = 0.1, early_stop_json: bool = True) -> str:
-        p_lower = prompt.lower()
-        
+    def generate(
+        self,
+        prompt: Union[str, List[Dict[str, str]]],
+        max_new_tokens: int = 160,
+        temperature: float = 0.1,
+        early_stop_json: bool = True,
+    ) -> str:
+        p_lower = _extract_user_text(prompt).lower()
+
         bsh_words = [
-            "mandi", "jerawat", "ursula", "muka", "ampela", "segentong", "burik", 
-            "gendut", "gemuk", "pesek", "item", "ireng", "dekil", "kucel", "tepos", 
+            "mandi", "jerawat", "ursula", "muka", "ampela", "segentong", "burik",
+            "gendut", "gemuk", "pesek", "item", "ireng", "dekil", "kucel", "tepos",
             "ompong", "kurus", "kerempeng", "dower", "behel", "bau", "jelek"
         ]
         ins_words = [
-            "bego", "tolol", "goblok", "idiot", "bloon", "bodoh", "otak", "cacat", 
-            "autis", "babi", "anjing", "monyet", "bangsat", "bajingan", "tai", 
-            "kontol", "memek", "pantek", "lonte", "jablay", "perek", "jalang", 
+            "bego", "tolol", "goblok", "idiot", "bloon", "bodoh", "otak", "cacat",
+            "autis", "babi", "anjing", "monyet", "bangsat", "bajingan", "tai",
+            "kontol", "memek", "pantek", "lonte", "jablay", "perek", "jalang",
             "hama", "rusak", "mati", "gagal", "buset"
         ]
         shm_words = [
-            "kampungan", "udik", "miskin", "gembel", "pansos", "alay", "norak", 
+            "kampungan", "udik", "miskin", "gembel", "pansos", "alay", "norak",
             "belagu", "songong", "sok cantik", "berasa paling cantik", "sok ganteng", "sok kaya"
         ]
         thr_words = ["mati", "bunuh", "habisi", "hajar", "gampar", "pukul", "ancam"]
@@ -61,7 +67,7 @@ class MockEngine:
         is_shm = any(w in p_lower for w in shm_words)
         is_thr = any(w in p_lower for w in thr_words)
         is_negative = is_bsh or is_ins or is_shm or is_thr
-        
+
         if is_negative:
             if is_thr:
                 b_type = "THR"
@@ -91,7 +97,7 @@ class MockEngine:
                 explanation = "Teks mengekspresikan ejekan dan penghinaan martabat personal dalam konteks media sosial."
                 severity = "MEDIUM"
                 implicitness = "E0" if any(w in p_lower for w in ["babi", "anjing", "bangsat", "bajingan"]) else "E1"
-                
+
             return f"""{{
   "cyberbullying": "YES",
   "type": "{b_type}",
@@ -114,294 +120,91 @@ class MockEngine:
   "explanation": "Komentar bernada positif atau netral tanpa unsur ejekan, hinaan, atau pelecehan."
 }"""
 
-    def generate_batch(self, prompts: List[str], max_new_tokens: int = 220, temperature: float = 0.1, early_stop_json: bool = True) -> List[str]:
-        # Fast simulated batched response
-        return [self.generate(p, max_new_tokens, temperature, early_stop_json) for p in prompts]
-
-
-class LlamaEngine:
-    """
-    Optimized HuggingFace Transformers loader for Meta-Llama-3-8B-Instruct
-    with Stop Token tuning, Batched Generation, and Metal (MPS) support.
-    """
-    def __init__(
-        self,
-        model_name: str = "meta-llama/Meta-Llama-3-8B-Instruct",
-        cache_dir: Optional[str] = None,
-        device_mode: str = "auto",
-        quantization: str = "4-bit"
-    ):
-        self.model_name = model_name
-        self.cache_dir = cache_dir or os.path.expanduser("~/.cache/huggingface/hub")
-        self.device_mode = device_mode
-        self.quantization = quantization
-        self.is_mock = False
-        
-        self.tokenizer = None
-        self.model = None
-        self.terminators = []
-        self._load_model()
-
-    def _load_model(self):
-        # 1. Load Tokenizer
-        self.tokenizer = AutoTokenizer.from_pretrained(
-            self.model_name,
-            cache_dir=self.cache_dir
-        )
-        
-        # Left-padding is mandatory for decoder batched inference
-        self.tokenizer.padding_side = "left"
-        if self.tokenizer.pad_token is None:
-            self.tokenizer.pad_token = self.tokenizer.eos_token
-
-        # Define all LLaMA-3 EOS and EOT stop token IDs
-        self.terminators = [
-            self.tokenizer.eos_token_id,
-            128001,  # <|end_of_text|>
-            128009   # <|eot_id|>
-        ]
-
-        # 2. Configure Hardware Device & Quantization
-        model_kwargs = {
-            "cache_dir": self.cache_dir,
-        }
-
-        if self.quantization == "4-bit":
-            bnb_config = BitsAndBytesConfig(
-                load_in_4bit=True,
-                bnb_4bit_quant_type="nf4",
-                bnb_4bit_compute_dtype=torch.float16,
-                bnb_4bit_use_double_quant=True
-            )
-            model_kwargs["quantization_config"] = bnb_config
-            model_kwargs["device_map"] = "auto"
-        elif self.device_mode == "mps" and torch.backends.mps.is_available():
-            model_kwargs["torch_dtype"] = torch.float16
-            model_kwargs["device_map"] = "mps"
-        elif self.device_mode == "cuda" and torch.cuda.is_available():
-            model_kwargs["torch_dtype"] = torch.float16
-            model_kwargs["device_map"] = "auto"
-        else:
-            model_kwargs["torch_dtype"] = torch.float32
-            model_kwargs["device_map"] = "cpu"
-
-        # 3. Load Model
-        self.model = AutoModelForCausalLM.from_pretrained(
-            self.model_name,
-            **model_kwargs
-        )
-        self.model.eval()
-
-    def generate(
-        self,
-        prompt: str,
-        max_new_tokens: int = 160,
-        temperature: float = 0.1,
-        early_stop_json: bool = True
-    ) -> str:
-        results = self.generate_batch([prompt], max_new_tokens=max_new_tokens, temperature=temperature, early_stop_json=early_stop_json)
-        return results[0] if results else ""
-
     def generate_batch(
         self,
-        prompts: List[str],
-        max_new_tokens: int = 160,
+        prompts: List[Union[str, List[Dict[str, str]]]],
+        max_new_tokens: int = 220,
         temperature: float = 0.1,
-        early_stop_json: bool = True
+        early_stop_json: bool = True,
     ) -> List[str]:
-        """
-        Batched parallel inference for high throughput.
-        """
-        if not prompts:
-            return []
-
-        inputs = self.tokenizer(
-            prompts,
-            return_tensors="pt",
-            padding=True,
-            truncation=True,
-            max_length=2048
-        ).to(self.model.device)
-
-        gen_kwargs = {
-            "max_new_tokens": max_new_tokens,
-            "temperature": max(temperature, 0.01) if temperature > 0 else None,
-            "do_sample": True if temperature > 0 else False,
-            "eos_token_id": self.terminators,
-            "pad_token_id": self.tokenizer.eos_token_id
-        }
-
-        if early_stop_json:
-            prompt_lens = [len(inputs.input_ids[i]) for i in range(len(prompts))]
-            stop_criteria = StoppingCriteriaList([JsonStopCriteria(self.tokenizer, prompt_lens)])
-            gen_kwargs["stopping_criteria"] = stop_criteria
-
-        with torch.inference_mode():
-            outputs = self.model.generate(
-                **inputs,
-                **gen_kwargs
-            )
-
-        decoded_results = []
-        input_len = inputs.input_ids.shape[1]
-        
-        for i in range(len(prompts)):
-            gen_tokens = outputs[i][input_len:]
-            text = self.tokenizer.decode(gen_tokens, skip_special_tokens=True).strip()
-            if not text:
-                text = self.tokenizer.decode(outputs[i], skip_special_tokens=True).strip()
-            decoded_results.append(text)
-
-        return decoded_results
-
-
-def run_single_annotation(
-    engine,
-    text: str,
-    system_prompt: str = None,
-    max_new_tokens: int = 220,
-    temperature: float = 0.1,
-    early_stop_json: bool = True
-) -> Dict[str, Any]:
-    """Convenience helper to format prompt, generate, and extract JSON for a single text."""
-    prompt = build_llama3_prompt(text, system_prompt=system_prompt)
-    start_time = time.time()
-    raw_output = engine.generate(
-        prompt,
-        max_new_tokens=max_new_tokens,
-        temperature=temperature,
-        early_stop_json=early_stop_json
-    )
-    latency = time.time() - start_time
-    parsed = extract_json_from_llama(raw_output)
-    parsed["latency_sec"] = round(latency, 2)
-    parsed["raw_output"] = raw_output
-    return parsed
-
-
-def run_batch_annotation_step(
-    engine,
-    texts: List[str],
-    system_prompt: str = None,
-    max_new_tokens: int = 220,
-    temperature: float = 0.1,
-    early_stop_json: bool = True
-) -> List[Dict[str, Any]]:
-    """Runs batched inference across a chunk of texts for maximum throughput."""
-    prompts = [build_llama3_prompt(t, system_prompt=system_prompt) for t in texts]
-    start_time = time.time()
-    
-    if hasattr(engine, "generate_batch"):
-        raw_outputs = engine.generate_batch(
-            prompts,
-            max_new_tokens=max_new_tokens,
-            temperature=temperature,
-            early_stop_json=early_stop_json
-        )
-    else:
-        raw_outputs = [
-            engine.generate(p, max_new_tokens=max_new_tokens, temperature=temperature)
-            for p in prompts
-        ]
-        
-    total_latency = time.time() - start_time
-    latency_per_item = round(total_latency / len(texts), 2) if texts else 0
-
-    results = []
-    for raw in raw_outputs:
-        parsed = extract_json_from_llama(raw)
-        parsed["latency_sec"] = latency_per_item
-        parsed["raw_output"] = raw
-        results.append(parsed)
-
-    return results
+        """Fast simulated batched response."""
+        return [self.generate(p, max_new_tokens, temperature, early_stop_json) for p in prompts]
 
 
 class SumopodEngine:
     """
     OpenAI-compatible AI Gateway Engine for SumoPod (https://api.sumopod.com/v1).
-    Enables low-latency, cloud GPU execution with IDR payment and minimal RAM on Streamlit Cloud.
+    Primary cloud LLM engine for annotation and Chain-of-Thought reasoning.
     """
+
     def __init__(
         self,
         api_key: str,
-        base_url: str = "https://api.sumopod.com/v1",
-        model_name: str = "meta-llama/Meta-Llama-3-8B-Instruct"
+        base_url: str = DEFAULT_SUMOPOD_BASE_URL,
+        model_name: str = DEFAULT_SUMOPOD_MODEL,
     ):
         self.api_key = (api_key or "").strip()
-        self.base_url = (base_url or "https://api.sumopod.com/v1").strip().rstrip("/")
-        self.model_name = (model_name or "meta-llama/Meta-Llama-3-8B-Instruct").strip()
+        self.base_url = (base_url or DEFAULT_SUMOPOD_BASE_URL).strip().rstrip("/")
+        self.model_name = (model_name or DEFAULT_SUMOPOD_MODEL).strip()
         self.is_mock = False
         self.backend_type = "sumopod"
 
+    def _build_headers(self) -> Dict[str, str]:
+        return {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+
+    @staticmethod
+    def _to_messages(prompt_or_messages: Union[str, List[Dict[str, str]]]) -> List[Dict[str, str]]:
+        if isinstance(prompt_or_messages, list):
+            return prompt_or_messages
+        return [{"role": "user", "content": str(prompt_or_messages)}]
+
     def test_connection(self) -> Tuple[bool, str]:
         """Verify API key and endpoint connectivity with a lightweight ping."""
-        import requests
         if not self.api_key:
             return False, "API Key SumoPod belum diisi."
         try:
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
-            }
             payload = {
                 "model": self.model_name,
                 "messages": [{"role": "user", "content": "Ping test"}],
-                "max_tokens": 5
+                "max_tokens": 5,
             }
             resp = requests.post(
                 f"{self.base_url}/chat/completions",
-                headers=headers,
+                headers=self._build_headers(),
                 json=payload,
-                timeout=15
+                timeout=15,
             )
             if resp.status_code == 200:
-                return True, "Koneksi ke SumoPod AI Gateway berhasil terhubung!"
-            else:
-                return False, f"Gagal (HTTP {resp.status_code}): {resp.text[:200]}"
+                return True, f"Koneksi ke SumoPod AI Gateway ({self.model_name}) berhasil terhubung!"
+            return False, f"Gagal (HTTP {resp.status_code}): {resp.text[:200]}"
         except Exception as e:
             return False, str(e)
 
     def generate(
         self,
-        prompt: str,
+        prompt: Union[str, List[Dict[str, str]]],
         max_new_tokens: int = 220,
         temperature: float = 0.1,
-        early_stop_json: bool = False
+        early_stop_json: bool = False,
     ) -> str:
-        import requests
         if not self.api_key:
             raise ValueError("SumoPod API Key kosong. Masukkan API Key di tab Pengaturan & Model.")
 
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
-
-        # Convert prompt with LLaMA chat special tokens into standard OpenAI messages if present
-        if "<|start_header_id|>system<|end_header_id|>" in prompt and "<|start_header_id|>user<|end_header_id|>" in prompt:
-            parts = prompt.split("<|start_header_id|>user<|end_header_id|>")
-            sys_part = parts[0].replace("<|begin_of_text|><|start_header_id|>system<|end_header_id|>", "").replace("<|eot_id|>", "").strip()
-            user_part = parts[1].replace("<|eot_id|><|start_header_id|>assistant<|end_header_id|>", "").strip()
-            messages = [
-                {"role": "system", "content": sys_part},
-                {"role": "user", "content": user_part}
-            ]
-        else:
-            messages = [{"role": "user", "content": prompt}]
-
         payload = {
             "model": self.model_name,
-            "messages": messages,
-            "temperature": max(temperature, 0.01) if temperature > 0 else 0.1,
-            "max_tokens": max_new_tokens
+            "messages": self._to_messages(prompt),
+            "temperature": max(0.0, float(temperature)) if temperature is not None else 0.1,
+            "max_tokens": int(max_new_tokens),
         }
 
         resp = requests.post(
             f"{self.base_url}/chat/completions",
-            headers=headers,
+            headers=self._build_headers(),
             json=payload,
-            timeout=60
+            timeout=60,
         )
         if resp.status_code != 200:
             raise RuntimeError(f"SumoPod API Error ({resp.status_code}): {resp.text}")
@@ -411,12 +214,86 @@ class SumopodEngine:
 
     def generate_batch(
         self,
-        prompts: List[str],
+        prompts: List[Union[str, List[Dict[str, str]]]],
         max_new_tokens: int = 220,
         temperature: float = 0.1,
-        early_stop_json: bool = False
+        early_stop_json: bool = False,
     ) -> List[str]:
-        return [self.generate(p, max_new_tokens, temperature, early_stop_json) for p in prompts]
+        if not prompts:
+            return []
+        if len(prompts) == 1:
+            return [self.generate(prompts[0], max_new_tokens, temperature, early_stop_json)]
+
+        max_workers = min(len(prompts), 8)
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            return list(
+                executor.map(
+                    lambda p: self.generate(p, max_new_tokens, temperature, early_stop_json),
+                    prompts,
+                )
+            )
+
+
+def run_single_annotation(
+    engine,
+    text: str,
+    system_prompt: Optional[str] = None,
+    max_new_tokens: int = 220,
+    temperature: float = 0.1,
+    early_stop_json: bool = False,
+) -> Dict[str, Any]:
+    """Convenience helper to format chat messages, invoke SumoPod/Mock engine, and extract JSON."""
+    messages = build_chat_messages(text, system_prompt=system_prompt)
+    start_time = time.time()
+    raw_output = engine.generate(
+        messages,
+        max_new_tokens=max_new_tokens,
+        temperature=temperature,
+        early_stop_json=early_stop_json,
+    )
+    latency = time.time() - start_time
+    parsed = extract_json_from_response(raw_output)
+    parsed["latency_sec"] = round(latency, 2)
+    parsed["raw_output"] = raw_output
+    return parsed
+
+
+def run_batch_annotation_step(
+    engine,
+    texts: List[str],
+    system_prompt: Optional[str] = None,
+    max_new_tokens: int = 220,
+    temperature: float = 0.1,
+    early_stop_json: bool = False,
+) -> List[Dict[str, Any]]:
+    """Runs concurrent SumoPod API (or fallback Mock) inference across a chunk of texts."""
+    messages_batch = [build_chat_messages(t, system_prompt=system_prompt) for t in texts]
+    start_time = time.time()
+
+    if hasattr(engine, "generate_batch"):
+        raw_outputs = engine.generate_batch(
+            messages_batch,
+            max_new_tokens=max_new_tokens,
+            temperature=temperature,
+            early_stop_json=early_stop_json,
+        )
+    else:
+        raw_outputs = [
+            engine.generate(m, max_new_tokens=max_new_tokens, temperature=temperature)
+            for m in messages_batch
+        ]
+
+    total_latency = time.time() - start_time
+    latency_per_item = round(total_latency / len(texts), 2) if texts else 0
+
+    results = []
+    for raw in raw_outputs:
+        parsed = extract_json_from_response(raw)
+        parsed["latency_sec"] = latency_per_item
+        parsed["raw_output"] = raw
+        results.append(parsed)
+
+    return results
 
 
 # Global Cached Engine Getters for Streamlit
@@ -424,46 +301,26 @@ try:
     import streamlit as st
 
     @st.cache_resource(show_spinner=False)
-    def get_cached_llama_engine(
-        model_name: str,
-        cache_dir: str,
-        device_mode: str,
-        quantization: str
-    ) -> LlamaEngine:
-        """Globally cached LLaMA-3 engine across all Streamlit sessions and reruns."""
-        return LlamaEngine(
-            model_name=model_name,
-            cache_dir=cache_dir,
-            device_mode=device_mode,
-            quantization=quantization
-        )
-
-    @st.cache_resource(show_spinner=False)
     def get_cached_sumopod_engine(
         api_key: str,
         base_url: str,
-        model_name: str
+        model_name: str,
     ) -> SumopodEngine:
         """Globally cached SumoPod AI Gateway engine."""
         return SumopodEngine(
             api_key=api_key,
             base_url=base_url,
-            model_name=model_name
+            model_name=model_name,
         )
 
     @st.cache_resource(show_spinner=False)
     def get_cached_mock_engine() -> MockEngine:
-        """Globally cached MockEngine for fast prototyping."""
+        """Globally cached MockEngine fallback for prototyping without an API key."""
         return MockEngine()
 
 except ImportError:
-    def get_cached_llama_engine(model_name: str, cache_dir: str, device_mode: str, quantization: str) -> LlamaEngine:
-        return LlamaEngine(model_name=model_name, cache_dir=cache_dir, device_mode=device_mode, quantization=quantization)
-
     def get_cached_sumopod_engine(api_key: str, base_url: str, model_name: str) -> SumopodEngine:
         return SumopodEngine(api_key=api_key, base_url=base_url, model_name=model_name)
 
     def get_cached_mock_engine() -> MockEngine:
         return MockEngine()
-
-

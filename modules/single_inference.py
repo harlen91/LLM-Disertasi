@@ -1,8 +1,8 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-from config import SAMPLE_COMMENTS, TAXONOMY
-from core.model_engine import run_single_annotation, MockEngine
+from config import SAMPLE_COMMENTS, TAXONOMY, DEFAULT_SUMOPOD_MODEL
+from core.model_engine import run_single_annotation
 from core.shap_explainer import HybridSHAPExplainer, align_shap_with_cot
 
 @st.cache_resource
@@ -21,19 +21,16 @@ def get_full_label(category: str, code: str) -> str:
 
 def render_single_inference_page():
     st.markdown("## 🧪 Playground Anotasi & Explainability Inspector")
-    st.markdown("Uji komentar individual secara instan untuk memeriksa klasifikasi multi-dimensi dan penalaran (*chain-of-thought explanation*) dari model LLaMA-3.")
+    st.markdown("Uji komentar individual secara instan untuk memeriksa klasifikasi multi-dimensi dan penalaran (*chain-of-thought explanation*) dari model LLM via **SumoPod AI Gateway**.")
 
     # Check active engine
     engine = st.session_state.get("active_engine")
     is_mock = getattr(engine, "is_mock", True) if engine else True
-    backend_type = getattr(engine, "backend_type", "mock" if is_mock else "local")
-    
+
     if is_mock:
-        st.caption("ℹ️ Mode saat ini: **Simulation / Mock Engine** (Pilih SumoPod API atau Local LLaMA-3 di tab Pengaturan & Model untuk inferensi riil).")
-    elif backend_type == "sumopod":
-        st.caption(f"🌐 Mode saat ini: **SumoPod AI Gateway** aktif (`{getattr(engine, 'model_name', 'LLaMA-3')}`).")
+        st.caption("ℹ️ Mode saat ini: **Mode Simulasi / Mock Fallback** (Masukkan SumoPod API Key di tab *Pengaturan & Model* untuk inferensi LLM riil).")
     else:
-        st.caption("🚀 Mode saat ini: **Local LLaMA-3 8B Instruct** aktif.")
+        st.caption(f"🌐 Mode saat ini: **SumoPod AI Gateway** aktif (`{getattr(engine, 'model_name', DEFAULT_SUMOPOD_MODEL)}`).")
 
     # Session history list for single runs
     if "single_history" not in st.session_state:
@@ -79,8 +76,7 @@ def render_single_inference_page():
                 text=user_text.strip(),
                 system_prompt=sys_prompt,
                 max_new_tokens=max_tok,
-                temperature=temp,
-                early_stop_json=True
+                temperature=temp
             )
 
             # Record to history
@@ -140,7 +136,7 @@ def render_single_inference_page():
 
         # Dual Explainability Framework (SHAP + CoT Reasoning)
         st.markdown("#### 🔬 Dual Explainability Framework (SHAP Token Attribution + CoT Rationale)")
-        st.caption("Pilar Disertasi: Mengintegrasikan atribusi fitur token kuantitatif (SHAP) dengan penalaran bahasa alami kualitatif (LLaMA-3 Chain-of-Thought).")
+        st.caption("Pilar Disertasi: Mengintegrasikan atribusi fitur token kuantitatif (SHAP) dengan penalaran bahasa alami kualitatif (SumoPod LLM Chain-of-Thought).")
 
         col_xai_left, col_xai_right = st.columns([1, 1])
 
@@ -166,9 +162,9 @@ def render_single_inference_page():
             else:
                 st.info("Modul SHAP sedang diinisialisasi atau belum tersedia.")
 
-        # KANAN: Kualitatif (LLaMA-3 CoT Rationale)
+        # KANAN: Kualitatif (SumoPod LLM CoT Rationale)
         with col_xai_right:
-            st.markdown("##### 💬 2. Kualitatif: Chain-of-Thought Rationale (LLaMA-3)")
+            st.markdown("##### 💬 2. Kualitatif: Chain-of-Thought Rationale (SumoPod LLM)")
             exp_text = res.get("explanation", "Tidak ada penjelasan yang dihasilkan.")
             conf_raw = res.get("confidence", "N/A")
             conf_val = f"{conf_raw:.2f}" if isinstance(conf_raw, (int, float)) else str(conf_raw)

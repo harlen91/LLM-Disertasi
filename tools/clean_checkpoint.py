@@ -9,7 +9,7 @@ PROJECT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_DIR))
 
 from core.schema import parse_confidence_score, sanitize_annotation_dict
-from core.parser import extract_json_from_llama
+from core.parser import extract_json_from_response
 
 def clean_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -34,7 +34,7 @@ def clean_dataframe(df: pd.DataFrame) -> pd.DataFrame:
         exp_str = str(row_dict.get("explanation", ""))
         err_str = str(cleaned_df.at[idx, "error"]) if "error" in cleaned_df.columns else ""
         if "No JSON brackets found" in exp_str or "No JSON brackets found" in err_str:
-            repaired = extract_json_from_llama(exp_str)
+            repaired = extract_json_from_response(exp_str)
             if repaired.get("error") != "No JSON brackets found":
                 for k, v in repaired.items():
                     if k in annotation_cols:

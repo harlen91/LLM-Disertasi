@@ -1,3 +1,5 @@
+from typing import List, Dict, Optional
+
 LABEL_SCHEMA = """
 Cyberbullying:
 YES / NO
@@ -54,19 +56,9 @@ CRITICAL RULES:
 4. explanation MUST be a concise 1-2 sentence rationale.
 5. Return strictly a single valid JSON object without markdown backticks (```) or any extra commentary."""
 
-def build_llama3_prompt(text: str, system_prompt: str = None) -> str:
-    """
-    Constructs the prompt adhering to Meta LLaMA-3 Chat Template as used in the research notebook.
-    """
-    sys_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
-    
-    return f"""<|begin_of_text|><|start_header_id|>system<|end_header_id|>
-
-{sys_prompt}
-
-<|start_header_id|>user<|end_header_id|>
-
-Text:
+def build_user_prompt(text: str) -> str:
+    """Constructs the structured user prompt for multi-dimensional cyberbullying annotation."""
+    return f"""Text:
 {text}
 
 Taxonomy:
@@ -82,6 +74,13 @@ Format JSON yang wajib diikuti:
   "severity": "LOW/MEDIUM/HIGH/NONE",
   "confidence": 0.95,
   "explanation": "concise rationale"
-}}
-<|eot_id|><|start_header_id|>assistant<|end_header_id|>
-"""
+}}"""
+
+
+def build_chat_messages(text: str, system_prompt: Optional[str] = None) -> List[Dict[str, str]]:
+    """Constructs OpenAI-compatible chat messages for the SumoPod AI Gateway API."""
+    sys_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
+    return [
+        {"role": "system", "content": sys_prompt},
+        {"role": "user", "content": build_user_prompt(text)},
+    ]

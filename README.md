@@ -1,6 +1,6 @@
 # 🛡️ IICD - LLM-Augmented Explainable Annotation & Distillation Studio
 
-Aplikasi berbasis **Streamlit (Python)** untuk anotasi multi-dimensi dataset cyberbullying Bahasa Indonesia menggunakan **Meta LLaMA-3 8B Instruct** (SumoPod API & Local MPS) dan distilasi pengetahuan (*Knowledge Distillation*) ke model Transformer Encoder **IndoBERTweet** untuk penelitian Disertasi.
+Aplikasi berbasis **Streamlit (Python)** untuk anotasi multi-dimensi dataset cyberbullying Bahasa Indonesia menggunakan **SumoPod AI Gateway API** dan distilasi pengetahuan (*Knowledge Distillation*) ke model Transformer Encoder **IndoBERTweet** serta arsitektur **Dual-Stream Hybrid Fusion** untuk penelitian Disertasi.
 
 Aplikasi ini ditransformasikan langsung dari eksperimen notebook [`IICD_LLaMA3_8B_HuggingFace_Cache_Annotation_v2.ipynb`](../IICD_LLaMA3_8B_HuggingFace_Cache_Annotation_v2.ipynb).
 
@@ -8,16 +8,15 @@ Aplikasi ini ditransformasikan langsung dari eksperimen notebook [`IICD_LLaMA3_8
 
 ## 🌟 Fitur Utama
 
-1. **Multi-Backend AI Engine**:
-   - **SumoPod AI Gateway (Rekomendasi Deployment Cloud)**: Menggunakan API model LLaMA-3 8B via SumoPod (OpenAI-compatible). RAM super ringan (< 100 MB), cepat, pembayaran lokal (QRIS/IDR), dan siap dideploy ke Streamlit Community Cloud.
-   - **Local LLaMA-3 8B**: Inferensi riil offline menggunakan bobot model lokal di `~/.cache/huggingface/hub` dengan akselerasi Apple Silicon (MPS).
-   - **Simulation / Mock Engine**: Uji antarmuka, tata letak, dan alur batch secara instan tanpa menggunakan kuota/RAM.
+1. **Cloud-First LLM Engine (SumoPod AI Gateway)**:
+   - **SumoPod AI Gateway API (Backend Utama)**: Menggunakan API LLM cloud OpenAI-compatible via SumoPod (default `deepseek-ai/DeepSeek-V3`, mendukung `gpt-4o-mini`, `Qwen/Qwen2.5-7B-Instruct`, dll.). RAM super ringan (< 100 MB), cepat, pembayaran lokal (QRIS/IDR), dan siap dideploy ke Streamlit Community Cloud.
+   - **Simulation / Mock Fallback Engine**: Fallback aman secara otomatis saat `SUMOPOD_API_KEY` belum diisi atau untuk uji antarmuka, tata letak, dan alur batch secara instan tanpa menggunakan kuota API.
 2. **Playground & Explainability Inspector**:
    - Pengujian teks komentar individual secara real-time.
    - Badge visual untuk 6 taksonomi: *Cyberbullying (YES/NO)*, *Type*, *Emotion*, *Cultural Context*, *Implicit Level*, dan *Severity*.
    - Kotak penjelasan penalaran (*chain-of-thought rationale*) dan confidence score (0.00 – 1.00 numerik).
 3. **Batch Pipeline dengan Kontrol Kecepatan & Auto-Checkpoint**:
-   - **Tuning Throughput (Batch Size)**: Pilihan memproses komentar secara efisien dalam batch forward pass.
+   - **Tuning Throughput (Concurrent Workers)**: Pilihan memproses beberapa komentar secara paralel ke SumoPod API dalam satu batch request.
    - **Auto-Save & Resume**: Menyimpan berkas setiap *N* baris ke folder `output/checkpoints/` dengan deteksi checkpoint instan untuk melanjutkan pemrosesan.
    - Live stream preview data teranotasi, kecepatan pemrosesan, dan ETA.
 4. **Dashboard Analitik & Visualisasi Taksonomi**:
@@ -41,8 +40,8 @@ iicd_annotation_app/
 ├── requirements.txt            # Daftar paket dependensi
 ├── run.sh                      # Script praktis untuk meluncurkan aplikasi
 ├── core/
-│   ├── model_engine.py         # Loader model LLaMA-3, SumoPod, & Mock engine
-│   ├── prompt_templates.py     # Template prompt LLaMA-3 Chat & skema JSON ketat
+│   ├── model_engine.py         # Engine SumoPod AI Gateway & Mock fallback
+│   ├── prompt_templates.py     # Template pesan chat OpenAI-compatible & skema JSON ketat
 │   ├── parser.py               # Robust JSON extractor, fallback, & auto-repair
 │   └── schema.py               # Skema validasi data & normalisasi confidence (0-1)
 ├── data_manager/
