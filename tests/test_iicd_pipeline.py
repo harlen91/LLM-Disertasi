@@ -253,7 +253,7 @@ def test_33d_teacher_feature_vector_and_schema():
 
     # ANTI-LEAKAGE INVARIANCE: Mengubah seluruh kolom target TIDAK boleh mengubah vektor 33D!
     base_evidence = {
-        "comment": "dasar jancuk muka mirip ursula segentong??",
+        "comment": "dasar jancuk muka mirip ursula segentong wkwk??",
         "explanation": "Compares appearance to Ursula, mocking weight with rhetorical sarcasm.",
         "confidence": 0.88,
         "cyberbullying": "YES",
@@ -670,3 +670,329 @@ def test_report_generation_no_simulation_and_streamlit_smoke(tmp_path):
     at = AppTest.from_file(str(PROJECT_DIR / "app.py"))
     at.run(timeout=30)
     assert not at.exception
+
+
+# ===========================================================================
+# 15 MANDATORY AUDIT & METHODOLOGICAL REFACTORING TESTS (TEST 1 - TEST 15)
+# ===========================================================================
+
+def test_01_contextual_evidence_always_33_dimensions():
+    """TEST 1: Contextual evidence harus selalu menghasilkan 33 dimensi."""
+    for inp in [
+        {},
+        {"comment": "hallo"},
+        {"comment": "dasar jelek", "confidence": 0.85},
+        {"comment": "test", "contextual_cues": {"linguistic": {"derogatory_lexical": 0.5}}},
+    ]:
+        vec = extract_contextual_evidence_vector(inp)
+        assert vec.shape == (33,), f"Expected shape (33,), got {vec.shape}"
+        assert vec.dtype == np.float32
+        assert np.all(np.isfinite(vec)), "Vector contains non-finite values"
+        assert np.all((vec >= 0.0) & (vec <= 1.0)), "Values outside [0.0, 1.0]"
+
+
+def test_02_target_label_alteration_invariance():
+    """TEST 2: Perubahan target label tidak boleh mengubah contextual evidence vector."""
+    base_evidence = {
+        "comment": "dasar kamu jelek banget muka kayak ursula",
+        "confidence": 0.88,
+        "contextual_cues": {
+            "linguistic": {"derogatory_lexical": 0.9},
+            "cultural": {"appearance_norm": 0.8},
+        },
+        "cyberbullying": "YES",
+        "type": "BSH",
+        "emotion": "MOCK",
+        "cultural_context": "APP",
+        "implicit_level": "E1",
+        "severity": "HIGH",
+    }
+    flipped = {
+        **base_evidence,
+        "cyberbullying": "NO",
+        "type": "NONE",
+        "emotion": "NEU",
+        "cultural_context": "NONE",
+        "implicit_level": "E0",
+        "severity": "NONE",
+    }
+    vec1 = extract_contextual_evidence_vector(base_evidence)
+    vec2 = extract_contextual_evidence_vector(flipped)
+    assert np.allclose(vec1, vec2), "Target labels altered the contextual evidence vector!"
+
+
+def test_03_explanation_conclusion_independence():
+    """TEST 3: Free-form target conclusion dalam explanation tidak boleh memengaruhi Stream B."""
+    base_evidence = {
+        "comment": "kamu kok terlihat gemukan sekarang",
+        "confidence": 0.85,
+        "contextual_cues": {"cultural": {"appearance_norm": 0.7}},
+    }
+    exp_cb = {**base_evidence, "explanation": "The comment is explicit cyberbullying and body shaming insult."}
+    exp_neutral = {**base_evidence, "explanation": "This is a polite neutral observation without harmful intent."}
+    exp_empty = {**base_evidence, "explanation": ""}
+
+    vec_a = extract_contextual_evidence_vector(exp_cb)
+    vec_b = extract_contextual_evidence_vector(exp_neutral)
+    vec_c = extract_contextual_evidence_vector(exp_empty)
+
+    assert np.allclose(vec_a, vec_b), "Changing explanation changed the 33D feature vector!"
+    assert np.allclose(vec_a, vec_c), "Empty explanation changed the 33D feature vector!"
+
+
+def test_04_missing_contextual_cues_explicit_policy():
+    """TEST 4: Missing contextual cues harus ditangani berdasarkan kebijakan yang eksplisit."""
+    vec_missing = extract_contextual_evidence_vector({
+        "comment": "dasar bego dan sok pintar lu!",
+        "contextual_cues": None,
+        "confidence": None,
+    })
+    assert vec_missing.shape == (33,)
+    assert np.all(np.isfinite(vec_missing))
+    assert vec_missing[0] > 0.0  # ling_derogatory_lexical from 'bego'
+    assert vec_missing[2] > 0.0  # ling_rhetorical_punct from '!'
+    assert vec_missing[5] > 0.0  # ling_second_person_target from 'lu'
+    assert vec_missing[32] == 0.0  # missing confidence defaults to 0.0 explicitly
+
+
+def test_05_batch_annotation_persists_contextual_cues(tmp_path):
+    """TEST 5: Batch annotation harus mempertahankan contextual_cues."""
+    cues_data = {
+        "linguistic": {"derogatory_lexical": 0.85},
+        "cultural": {"appearance_norm": 0.70},
+        "emotional": {"derision_ridicule": 0.60},
+        "pragmatic": {"irony_sarcasm": 0.50},
+        "contextual": {"direct_addressee": 1.0},
+    }
+    df = pd.DataFrame([{"comment": "tes komentar", "user_id": "u1"}])
+    annotation_cols = [
+        "cyberbullying", "type", "emotion", "cultural_context",
+        "implicit_level", "severity", "confidence", "explanation", "contextual_cues", "error",
+        "llm_model", "prompt_version", "annotated_at", "annotation_source", "is_mock"
+    ]
+    for col in annotation_cols:
+        df[col] = None
+
+    res = {
+        "cyberbullying": "YES",
+        "type": "INS",
+        "emotion": "MOCK",
+        "cultural_context": "APP",
+        "implicit_level": "E0",
+        "severity": "LOW",
+        "confidence": 0.90,
+        "explanation": "Contoh alasan",
+        "contextual_cues": cues_data,
+        "error": None,
+        "llm_model": "deepseek-v4.1-flash:netra",
+        "prompt_version": PROMPT_VERSION,
+        "annotated_at": "2026-11-13T00:00:00Z",
+        "annotation_source": "sumopod_api",
+        "is_mock": False,
+    }
+    for k in annotation_cols:
+        if k in res:
+            val = res[k]
+            if k == "contextual_cues" and isinstance(val, (dict, list)):
+                val = json.dumps(val, ensure_ascii=False)
+            df.at[0, k] = val
+
+    saved_cues = df.at[0, "contextual_cues"]
+    assert saved_cues is not None
+    loaded_dict = json.loads(saved_cues)
+    assert loaded_dict["cultural"]["appearance_norm"] == 0.70
+
+
+def test_06_json_annotation_schema_compliance():
+    """TEST 6: JSON annotation harus memenuhi schema."""
+    valid_payload = json.dumps({
+        "cyberbullying": "YES",
+        "type": "BSH",
+        "emotion": "MOCK",
+        "cultural_context": "APP",
+        "implicit_level": "E1",
+        "severity": "LOW",
+        "confidence": 0.88,
+        "explanation": "Sarkasme fisik",
+        "contextual_cues": {"cultural": {"appearance_norm": 0.9}},
+    })
+    rec = extract_json_from_response(valid_payload)
+    is_valid, issues = validate_annotation_record(rec)
+    assert is_valid is True, f"Validation issues: {issues}"
+    assert rec["cyberbullying"] == "YES"
+    assert rec["type"] == "BSH"
+    assert rec["contextual_cues"]["cultural"]["appearance_norm"] == 0.9
+
+
+def test_07_mock_annotation_excluded_from_training(tmp_path):
+    """TEST 7: Mock annotation tidak boleh masuk ke training dataset."""
+    df_raw = _build_synthetic_annotated_df(20, include_human_gt=False)
+    df_raw.loc[:9, "is_mock"] = True
+    df_raw.loc[:9, "annotation_source"] = "mock_simulation"
+
+    raw_csv = tmp_path / "raw_with_mock.csv"
+    df_raw.to_csv(raw_csv, index=False)
+    out_dir = tmp_path / "mock_test_out"
+    out_dir.mkdir()
+
+    curate_and_normalize(raw_csv, out_dir / "clean.csv", perform_split=True, allow_mock_rows=False)
+    clean_df = pd.read_csv(out_dir / "clean.csv")
+    assert len(clean_df) <= 10
+    if "is_mock" in clean_df.columns:
+        assert not any(clean_df["is_mock"].fillna(False).astype(bool))
+    if "annotation_source" in clean_df.columns:
+        assert not any(clean_df["annotation_source"].fillna("").astype(str) == "mock_simulation")
+    failed_log = json.loads((out_dir / "failed_annotations_log.json").read_text(encoding="utf-8"))
+    assert any("mock_simulation" in rec["reasons"] for rec in failed_log["records"])
+
+
+def test_08_group_aware_split_no_overlap(tmp_path):
+    """TEST 8: Train, validation, dan test tidak boleh memiliki group overlap."""
+    df = _build_synthetic_annotated_df(36, include_human_gt=False)
+    df["user_id"] = [f"user_{i // 4}" for i in range(len(df))]
+    raw_csv = tmp_path / "groups.csv"
+    df.to_csv(raw_csv, index=False)
+    out_dir = tmp_path / "out_grp"
+    out_dir.mkdir()
+
+    curate_and_normalize(raw_csv, out_dir / "clean.csv", perform_split=True, group_col="user_id")
+    tr = pd.read_csv(out_dir / "train.csv")
+    va = pd.read_csv(out_dir / "val.csv")
+    te = pd.read_csv(out_dir / "test.csv")
+
+    tr_groups = set(tr["user_id"].unique())
+    va_groups = set(va["user_id"].unique())
+    te_groups = set(te["user_id"].unique())
+
+    assert len(tr_groups.intersection(va_groups)) == 0, "Train-Val group overlap detected!"
+    assert len(tr_groups.intersection(te_groups)) == 0, "Train-Test group overlap detected!"
+    assert len(va_groups.intersection(te_groups)) == 0, "Val-Test group overlap detected!"
+
+
+def test_09_duplicate_normalized_comment_cross_split_rejection():
+    """TEST 9: Tidak boleh terdapat duplicate normalized comments lintas split."""
+    tr = pd.DataFrame({"comment_normalized": ["kamu jelek sekali", "selamat pagi"]})
+    va = pd.DataFrame({"comment_normalized": ["kamu jelek sekali"]})
+    te = pd.DataFrame({"comment_normalized": ["terima kasih"]})
+
+    with pytest.raises(ValueError, match="Data leakage terdeteksi"):
+        verify_no_cross_split_leakage(tr, va, te)
+
+
+def test_10_model_output_dimensions_and_heads(tiny_hf_backbone):
+    """TEST 10: Semua output model harus memiliki dimensi yang sesuai."""
+    model = HybridFusionModel(pretrained_model_name=str(tiny_hf_backbone), llm_input_dim=33, llm_hidden_dim=16)
+    b, s = 2, 8
+    inp = torch.randint(0, 10, (b, s))
+    mask = torch.ones((b, s), dtype=torch.long)
+    vec = torch.rand((b, 33))
+
+    out = model(input_ids=inp, attention_mask=mask, llm_vectors=vec)
+    assert out["logits"]["binary"].shape == (b, 2)
+    assert out["logits"]["type"].shape == (b, 9)
+    assert out["logits"]["emotion"].shape == (b, 6)
+    assert out["logits"]["cultural"].shape == (b, 8)
+    assert out["logits"]["implicit"].shape == (b, 3)
+    assert out["logits"]["severity"].shape == (b, 4)
+    assert out["gate_values"].shape == (b, model.trans_hidden_dim)
+
+
+def test_11_masked_loss_safety_all_ignore_index():
+    """TEST 11: Masked loss harus aman ketika seluruh label dalam satu task bernilai ignore_index."""
+    fl = FocalLoss(ignore_index=IGNORE_INDEX)
+    logits = torch.randn(4, 2, requires_grad=True)
+    all_ignored = torch.full((4,), IGNORE_INDEX, dtype=torch.long)
+    loss = fl(logits, all_ignored)
+    assert float(loss) == 0.0
+    loss.backward()
+    assert not torch.isnan(logits.grad).any()
+
+    mce_loss, mce_active = masked_cross_entropy(logits, all_ignored, ignore_index=IGNORE_INDEX)
+    assert float(mce_loss) == 0.0 and mce_active is False
+
+
+def test_12_checkpoint_save_and_reload(tiny_hf_backbone, tmp_path):
+    """TEST 12: Checkpoint dapat disimpan dan dimuat kembali."""
+    model = HybridFusionModel(pretrained_model_name=str(tiny_hf_backbone), llm_input_dim=33, llm_hidden_dim=16)
+    weights_path = tmp_path / "best_hybrid_model.pt"
+    torch.save(model.state_dict(), weights_path)
+
+    from transformers import AutoTokenizer
+    AutoTokenizer.from_pretrained(str(tiny_hf_backbone)).save_pretrained(str(tmp_path))
+
+    manifest = build_model_manifest(
+        model_architecture="HybridFusionModel",
+        pretrained_model=str(tiny_hf_backbone),
+        checkpoint_location=weights_path,
+        hyperparameters={"llm_hidden_dim": 16},
+        evaluation_metrics={"macro_f1": 0.8},
+        optimal_threshold=0.52,
+    )
+    save_model_manifest(tmp_path, manifest)
+
+    reloaded_m, _, _, reloaded_man = load_hybrid_classifier_with_manifest(weights_path)
+    assert reloaded_man["optimal_threshold"] == pytest.approx(0.52)
+    assert reloaded_m is not None
+
+
+def test_13_model_inference_consistency_with_manifest(tiny_hf_backbone, tmp_path):
+    """TEST 13: Model inference harus konsisten dengan model manifest."""
+    model = HybridFusionModel(pretrained_model_name=str(tiny_hf_backbone), llm_input_dim=33, llm_hidden_dim=16)
+    weights_path = tmp_path / "best_hybrid_model.pt"
+    torch.save(model.state_dict(), weights_path)
+
+    from transformers import AutoTokenizer
+    tokenizer = AutoTokenizer.from_pretrained(str(tiny_hf_backbone))
+    tokenizer.save_pretrained(str(tmp_path))
+
+    manifest = build_model_manifest(
+        model_architecture="HybridFusionModel",
+        pretrained_model=str(tiny_hf_backbone),
+        checkpoint_location=weights_path,
+        hyperparameters={"llm_hidden_dim": 16},
+        evaluation_metrics={"macro_f1": 0.75},
+        optimal_threshold=0.35,
+    )
+    save_model_manifest(tmp_path, manifest)
+
+    loaded_m, tok, dev, man = load_hybrid_classifier_with_manifest(weights_path)
+    pred = predict_hybrid_text(loaded_m, tok, dev, "kamu jelek sekali", manifest=man)
+    assert pred["threshold"] == pytest.approx(0.35)
+    assert pred["cyberbullying"] in {"YES", "NO"}
+    assert len(pred["all_head_probabilities"]) == 6
+
+
+def test_14_shap_explanation_uses_real_model(tiny_hf_backbone, tmp_path):
+    """TEST 14: SHAP explanation harus menggunakan model yang benar-benar terlatih."""
+    with pytest.raises(FileNotFoundError):
+        HybridSHAPExplainer(model_path=tmp_path / "nonexistent.pt", model_type="hybrid")
+
+    model = HybridFusionModel(pretrained_model_name=str(tiny_hf_backbone), llm_input_dim=33, llm_hidden_dim=16)
+    from transformers import AutoTokenizer
+    tokenizer = AutoTokenizer.from_pretrained(str(tiny_hf_backbone))
+
+    explainer = HybridSHAPExplainer(
+        model_type="hybrid",
+        loaded_model=model,
+        loaded_tokenizer=tokenizer,
+        device="cpu",
+        manifest={"hyperparameters": {"max_length": 16}},
+        background_vectors=np.zeros((2, 33), dtype=np.float32),
+    )
+    res = explainer.explain_dual_modalities("dasar jelek", max_evals_text=20, max_evals_vec=40)
+    assert "shap.Explainer" in res["textual_shap"]["method"]
+    assert res["llm_vector_shap"]["available"] is True
+    assert len(res["llm_vector_shap"]["shap_values"]) == 33
+
+
+def test_15_metrics_reproducibility_from_prediction_artifacts():
+    """TEST 15: Seluruh metrik harus dapat direproduksi dari prediction artifacts."""
+    y_true = np.array([0, 1, 0, 1, 1, 0, 1, 0])
+    y_prob = np.array([0.1, 0.9, 0.2, 0.8, 0.7, 0.3, 0.85, 0.15])
+    m1 = compute_comprehensive_classification_metrics(y_true, y_prob, threshold=0.5, n_bootstrap=20)
+    m2 = compute_comprehensive_classification_metrics(y_true, y_prob, threshold=0.5, n_bootstrap=20)
+
+    assert m1["accuracy"] == m2["accuracy"] == 1.0
+    assert m1["macro_f1"] == m2["macro_f1"] == 1.0
+    assert m1["roc_auc"] == m2["roc_auc"] == 1.0
+    assert m1["calibration"]["brier_score"] == pytest.approx(m2["calibration"]["brier_score"])

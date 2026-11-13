@@ -24,7 +24,7 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 
-from config import APP_VERSION, MODEL_MANIFEST_FILENAME, TAXONOMY
+from config import APP_VERSION, MODEL_MANIFEST_FILENAME, TAXONOMY, APP_DIR
 
 
 def compute_calibration_metrics(
@@ -306,6 +306,12 @@ def build_model_manifest(
     extra_metadata: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Membangun struktur standar model_manifest.json untuk reproduktibilitas penelitian."""
+    ckpt_path = Path(checkpoint_location)
+    try:
+        rel_ckpt = str(ckpt_path.relative_to(APP_DIR))
+    except ValueError:
+        rel_ckpt = str(ckpt_path)
+
     manifest: Dict[str, Any] = {
         "model_architecture": model_architecture,
         "pretrained_model": pretrained_model,
@@ -319,7 +325,8 @@ def build_model_manifest(
         "taxonomy": TAXONOMY,
         "hyperparameters": hyperparameters,
         "evaluation_metrics": evaluation_metrics,
-        "checkpoint_location": str(checkpoint_location),
+        "checkpoint_location": rel_ckpt,
+        "checkpoint_location_absolute": str(ckpt_path),
         "git_storage_note": "Bobot biner model (.pt/.safetensors) dikecualikan dari Git melalui .gitignore; simpan secara lokal atau pada external artifact storage.",
     }
     if extra_metadata:

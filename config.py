@@ -9,6 +9,7 @@ DEFAULT_SUMOPOD_BASE_URL = "https://api.sumopod.com/v1"
 DEFAULT_SUMOPOD_MODEL = "deepseek-ai/DeepSeek-V3"
 SUMOPOD_POPULAR_MODELS = [
     "deepseek-ai/DeepSeek-V3",
+    "deepseek-v4.1-flash:netra",
     "gpt-4o-mini",
     "Qwen/Qwen2.5-7B-Instruct",
     "meta-llama/Llama-3.1-8B-Instruct"

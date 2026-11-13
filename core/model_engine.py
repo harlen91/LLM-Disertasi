@@ -7,7 +7,7 @@ from typing import Tuple, Optional, List, Dict, Any, Union
 import requests
 
 from config import DEFAULT_SUMOPOD_BASE_URL, DEFAULT_SUMOPOD_MODEL
-from .prompt_templates import build_chat_messages, PROMPT_VERSION
+from .prompt_templates import build_chat_messages, PROMPT_VERSION, PROMPT_HASH
 from .parser import extract_json_from_response
 
 logger = logging.getLogger(__name__)
@@ -382,6 +382,7 @@ def _attach_annotation_metadata(
     parsed["raw_output"] = raw_output
     parsed["llm_model"] = getattr(engine, "model_name", "mock-heuristic-simulator" if is_mock else DEFAULT_SUMOPOD_MODEL)
     parsed["prompt_version"] = prompt_version
+    parsed["prompt_hash"] = PROMPT_HASH
     parsed["annotated_at"] = datetime.now(timezone.utc).isoformat()
     parsed["annotation_source"] = "mock_simulation" if is_mock else "sumopod_api"
     parsed["is_mock"] = is_mock

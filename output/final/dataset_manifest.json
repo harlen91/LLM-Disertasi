@@ -1,6 +1,6 @@
 {
-  "dataset_version": "iicd-curated-8ee578088376",
-  "curated_at": "2026-11-12T08:09:21.036199+00:00",
+  "dataset_version": "iicd-curated-b2a6c856eeee",
+  "curated_at": "2026-11-13T03:57:32.182382+00:00",
   "input_source": "/Users/harlengilbertsimanullang/Documents/Disertasi/LLM-Augmented Explainable/iicd_annotation_app/output/checkpoints/checkpoint_Dataset-Research.csv",
   "output_dataset": "/Users/harlengilbertsimanullang/Documents/Disertasi/LLM-Augmented Explainable/iicd_annotation_app/output/final/iicd_cleaned_indobertweet.csv",
   "supervision_policy": "llm_generated_pseudo_labels",
@@ -12,7 +12,11 @@
     "deepseek-v4.1-flash:netra"
   ],
   "prompt_versions_used": [
-    "iicd-v2.0-sumopod"
+    "iicd-v2.0-sumopod",
+    "iicd-v3.0-sumopod"
+  ],
+  "prompt_hashes_used": [
+    "ad4da2b65479f3b6"
   ],
   "evaluation_note": "Evaluasi mengukur kesepakatan/konsistensi model terhadap pseudo-label yang dihasilkan LLM (tanpa ketergantungan pada human ground truth).",
   "raw_audit": {
@@ -24,34 +28,34 @@
     "missing_values_per_column": {
       "sentiment": 0,
       "comment": 0,
-      "cyberbullying": 1458,
-      "type": 1458,
-      "emotion": 1458,
-      "cultural_context": 1458,
-      "implicit_level": 1458,
-      "severity": 1458,
-      "confidence": 1458,
-      "explanation": 1458,
+      "cyberbullying": 1278,
+      "type": 1278,
+      "emotion": 1278,
+      "cultural_context": 1278,
+      "implicit_level": 1278,
+      "severity": 1278,
+      "confidence": 1278,
+      "explanation": 1278,
       "error": 1508,
-      "llm_model": 1458,
-      "prompt_version": 1458,
-      "annotated_at": 1458,
-      "annotation_source": 1458,
-      "is_mock": 1458
+      "llm_model": 1278,
+      "prompt_version": 1278,
+      "annotated_at": 1278,
+      "annotation_source": 1278,
+      "is_mock": 1278
     },
     "empty_comments": 0,
     "short_comments_lt_3": 2,
     "raw_duplicates": 8,
     "normalized_duplicates": 13,
-    "invalid_confidence_count": 1458,
-    "invalid_taxonomy_rows": 1458,
-    "consistency_issue_rows": 1458,
+    "invalid_confidence_count": 1278,
+    "invalid_taxonomy_rows": 1278,
+    "consistency_issue_rows": 1278,
     "mock_simulation_rows": 0
   },
-  "failed_annotations_count": 1459,
+  "failed_annotations_count": 1279,
   "failed_annotations_log": "/Users/harlengilbertsimanullang/Documents/Disertasi/LLM-Augmented Explainable/iicd_annotation_app/output/final/failed_annotations_log.json",
-  "dedup_dropped": 0,
-  "final_rows": 49,
+  "dedup_dropped": 3,
+  "final_rows": 226,
   "teacher_vector_dim": 33,
   "contextual_cue_schema": [
     {
@@ -130,47 +134,53 @@
   ],
   "class_distribution": {
     "cyberbullying_binary": {
-      "1": 38,
-      "0": 11
+      "1": 156,
+      "0": 70
     },
     "type": {
-      "INS": 24,
-      "NONE": 11,
-      "BSH": 10,
-      "SAR": 3,
-      "DIS": 1
+      "INS": 98,
+      "NONE": 70,
+      "BSH": 25,
+      "SAR": 24,
+      "SHM": 6,
+      "DIS": 2,
+      "SEX": 1
     },
     "emotion": {
-      "MOCK": 30,
-      "NEU": 11,
-      "DIS": 5,
-      "ANG": 3
+      "MOCK": 118,
+      "NEU": 68,
+      "DIS": 30,
+      "ANG": 7,
+      "HUM": 2,
+      "SAD": 1
     },
     "cultural_context": {
-      "NONE": 25,
-      "APP": 17,
-      "STA": 4,
-      "GEN": 1,
-      "INT": 1,
+      "NONE": 111,
+      "APP": 64,
+      "INT": 28,
+      "STA": 16,
+      "GEN": 3,
+      "REG": 3,
       "FAM": 1
     },
     "implicit_level": {
-      "E0": 28,
-      "E1": 21
+      "E1": 122,
+      "E0": 104
     },
     "severity": {
-      "LOW": 30,
-      "NONE": 11,
-      "MEDIUM": 8
+      "LOW": 105,
+      "NONE": 70,
+      "MEDIUM": 50,
+      "HIGH": 1
     }
   },
   "splits": {
     "random_state": 42,
     "strategy": "stratified_composite_pseudo_label",
     "group_col": null,
-    "train_size": 39,
-    "val_size": 5,
-    "test_size": 5,
+    "train_size": 180,
+    "val_size": 23,
+    "test_size": 23,
     "cross_split_leakage_check": {
       "comment": {
         "train_val_overlap": 0,

@@ -29,6 +29,7 @@ PROJECT_DIR = SCRIPT_DIR.parent
 sys.path.insert(0, str(PROJECT_DIR))
 
 from config import DEFAULT_RANDOM_SEED
+from core.prompt_templates import PROMPT_HASH
 from core.schema import (
     MISSING_LABEL,
     VALID_CYBERBULLYING,
@@ -208,12 +209,20 @@ def _build_composite_stratify_labels(df: pd.DataFrame) -> np.ndarray:
     Membangun label stratifikasi komposit berbasis pseudo-label (`label` + `target_implicit_level`)
     bila setiap strata memiliki minimal >= 4 sampel; jika tidak, fallback ke `label` biner.
     """
-    if "target_implicit_level" in df.columns:
-        comp = df["label"].astype(str) + "__" + df["target_implicit_level"].astype(str)
+    if "label" in df.columns:
+        base_series = df["label"]
+    elif "cyberbullying" in df.columns:
+        base_series = (df["cyberbullying"].astype(str).str.upper() == "YES").astype(int)
+    else:
+        return np.zeros(len(df), dtype=int)
+
+    imp_col = "target_implicit_level" if "target_implicit_level" in df.columns else ("implicit_level" if "implicit_level" in df.columns else None)
+    if imp_col:
+        comp = base_series.astype(str) + "__" + df[imp_col].astype(str)
         counts = comp.value_counts()
         if (counts >= 4).all() and len(counts) > 1:
             return comp.values
-    return df["label"].values
+    return base_series.values
 
 
 def _split_train_val_test_indices(
@@ -270,24 +279,43 @@ def _split_train_val_test_indices(
             if len(train_idx) > 0 and len(val_idx) > 0 and len(test_idx) > 0:
                 return train_idx, val_idx, test_idx, f"group_aware_stratified({group_col})"
 
+    # Safely check whether initial stratify labels have >= 2 samples per class
+    init_strat = strat_labels
+    if init_strat is not None:
+        init_counts = pd.Series(init_strat).value_counts()
+        if (init_counts < 2).any() or len(init_counts) < 2:
+            # Fall back to binary label if possible
+            if "label" in df.columns:
+                bin_counts = df["label"].value_counts()
+                init_strat = df["label"].values if (bin_counts >= 2).all() and len(bin_counts) > 1 else None
+            else:
+                init_strat = None
+
     train_idx, temp_idx = train_test_split(
         indices,
         test_size=(val_ratio + test_ratio),
         random_state=random_state,
-        stratify=strat_labels,
+        stratify=init_strat,
     )
     relative_test_ratio = test_ratio / (val_ratio + test_ratio)
     temp_strat = strat_labels[temp_idx]
     val_counts = pd.Series(temp_strat).value_counts()
-    if (val_counts < 2).any():
+    if (val_counts < 2).any() and "label" in df.columns:
         temp_strat = df["label"].values[temp_idx]
+
+    strat_arg = temp_strat
+    if strat_arg is not None:
+        c_counts = pd.Series(strat_arg).value_counts()
+        if (c_counts < 2).any() or len(c_counts) < 2:
+            strat_arg = None
+
     val_idx, test_idx = train_test_split(
         temp_idx,
         test_size=relative_test_ratio,
         random_state=random_state,
-        stratify=temp_strat,
+        stratify=strat_arg,
     )
-    strat_kind = "stratified_composite_pseudo_label" if len(np.unique(strat_labels)) > 2 else "stratified_binary_pseudo_label"
+    strat_kind = "stratified_composite_pseudo_label" if (init_strat is not None and len(np.unique(init_strat)) > 2) else ("stratified_binary_pseudo_label" if init_strat is not None else "random_split_small_dataset")
     return train_idx, val_idx, test_idx, strat_kind
 
 
@@ -638,6 +666,11 @@ def curate_and_normalize(
     csv_sha = hashlib.sha256(output_csv.read_bytes()).hexdigest()[:12]
     llm_models_used = sorted(df_cleaned["llm_model"].dropna().astype(str).unique().tolist())
     prompt_versions_used = sorted(df_cleaned["prompt_version"].dropna().astype(str).unique().tolist())
+    prompt_hashes_used = (
+        sorted(df_cleaned["prompt_hash"].dropna().astype(str).unique().tolist())
+        if "prompt_hash" in df_cleaned.columns
+        else [PROMPT_HASH]
+    )
     dataset_manifest = {
         "dataset_version": f"iicd-curated-{csv_sha}",
         "curated_at": datetime.now(timezone.utc).isoformat(),
@@ -650,6 +683,7 @@ def curate_and_normalize(
         "stream_b_representation": "non_leaky_33d_contextual_evidence_cues",
         "llm_models_used": llm_models_used,
         "prompt_versions_used": prompt_versions_used,
+        "prompt_hashes_used": prompt_hashes_used,
         "evaluation_note": (
             "Evaluasi mengukur kesepakatan/konsistensi model terhadap pseudo-label yang dihasilkan LLM "
             "(tanpa ketergantungan pada human ground truth)."

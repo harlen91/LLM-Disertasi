@@ -274,7 +274,6 @@ def sanitize_annotation_dict(
         "severity": s_val,
         "confidence": conf_val,
         "explanation": exp_val,
+        "contextual_cues": cues_val if cues_val else {},
     }
-    if cues_val:
-        result["contextual_cues"] = cues_val
     return result

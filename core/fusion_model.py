@@ -570,6 +570,9 @@ def predict_hybrid_text(
     cue_summary = extract_cue_family_summary(llm_vec)
 
     max_len = int(manifest.get("hyperparameters", {}).get("max_length", 128)) if manifest else 128
+    trans_cfg = getattr(getattr(model, "transformer", None), "config", None)
+    if trans_cfg and hasattr(trans_cfg, "max_position_embeddings"):
+        max_len = min(max_len, int(trans_cfg.max_position_embeddings))
     text_mode = (manifest.get("hyperparameters", {}).get("text_input_mode", "text_only")) if manifest else "text_only"
 
     if text_mode == "text_plus_rationale" and structured_rat:

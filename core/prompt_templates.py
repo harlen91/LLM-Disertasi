@@ -1,3 +1,4 @@
+import hashlib
 from typing import List, Dict, Optional
 
 PROMPT_VERSION = "iicd-v3.0-sumopod"
@@ -65,6 +66,13 @@ CRITICAL RULES:
 4. explanation MUST be a concise 1-2 sentence chain-of-thought rationale describing linguistic, cultural, emotional, and pragmatic evidence in the comment.
 5. contextual_cues MUST provide decimal evidence scores [0.00-1.00] for linguistic, cultural, emotional, pragmatic, and contextual cues observed in the text.
 6. Return strictly a single valid JSON object without markdown backticks (```) or any extra commentary."""
+
+def get_prompt_hash(system_prompt: Optional[str] = None) -> str:
+    """Returns SHA256 hex digest (first 16 chars) of the prompt template for provenance tracking."""
+    content = (system_prompt or DEFAULT_SYSTEM_PROMPT) + "\n" + LABEL_SCHEMA
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
+
+PROMPT_HASH = get_prompt_hash()
 
 def build_user_prompt(text: str) -> str:
     """Constructs the structured user prompt for multi-dimensional cyberbullying annotation and cue extraction."""

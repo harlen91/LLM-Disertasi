@@ -2,11 +2,11 @@
   "model_architecture": "Hybrid Dual-Stream Gated Fusion (6-Head MTL)",
   "pretrained_model": "indolem/indobertweet-base-uncased",
   "model_version": "2.0.0",
-  "dataset_version": "iicd-curated-8ee578088376",
+  "dataset_version": "iicd-curated-b2a6c856eeee",
   "target_source": "pseudo_labeled_llm",
-  "training_date": "2026-11-12T08:13:15.580007+00:00",
+  "training_date": "2026-11-13T04:00:16.299013+00:00",
   "random_seed": 42,
-  "optimal_threshold": 0.2,
+  "optimal_threshold": 0.54,
   "threshold_selection_split": "validation",
   "taxonomy": {
     "cyberbullying": [
@@ -56,8 +56,8 @@
   },
   "hyperparameters": {
     "epochs_requested": 4,
-    "epochs_completed": 3,
-    "best_epoch": 1,
+    "epochs_completed": 4,
+    "best_epoch": 2,
     "batch_size": 16,
     "lr_transformer": 2e-05,
     "lr_heads": 0.0001,
@@ -71,170 +71,242 @@
     "eval_llm_stream_masked": false
   },
   "evaluation_metrics": {
-    "threshold": 0.2,
-    "support": 5,
-    "accuracy": 0.8,
-    "macro_precision": 0.4,
-    "macro_recall": 0.5,
-    "macro_f1": 0.4444,
-    "weighted_precision": 0.64,
-    "weighted_recall": 0.8,
-    "weighted_f1": 0.7111,
-    "roc_auc": 0.0,
-    "pr_auc": 0.6792,
+    "threshold": 0.54,
+    "support": 23,
+    "accuracy": 0.5652,
+    "macro_precision": 0.4866,
+    "macro_recall": 0.4866,
+    "macro_f1": 0.4866,
+    "weighted_precision": 0.5652,
+    "weighted_recall": 0.5652,
+    "weighted_f1": 0.5652,
+    "roc_auc": 0.3929,
+    "pr_auc": 0.6389,
     "calibration": {
-      "ece": 0.5124,
-      "mce": 0.7711,
-      "brier_score": 0.2797,
-      "log_loss": 0.7706
+      "ece": 0.1534,
+      "mce": 0.3423,
+      "brier_score": 0.2428,
+      "log_loss": 0.6799
     },
     "confidence_intervals_95": {
       "accuracy": [
-        0.4,
-        1.0
+        0.3913,
+        0.7391
       ],
       "macro_f1": [
-        0.2857,
-        1.0
+        0.303,
+        0.6734
       ],
       "roc_auc": [
-        0.0,
-        0.0
+        0.13,
+        0.6776
       ],
       "pr_auc": [
-        0.325,
-        0.7625
+        0.4649,
+        0.9131
       ]
     },
     "confusion_matrix": {
-      "tn": 0,
-      "fp": 1,
-      "fn": 0,
-      "tp": 4
+      "tn": 2,
+      "fp": 5,
+      "fn": 5,
+      "tp": 11
     },
     "confusion_matrix_2x2": [
       [
-        0,
-        1
+        2,
+        5
       ],
       [
-        0,
-        4
+        5,
+        11
       ]
     ],
     "per_class": {
       "non_cyberbullying": {
-        "precision": 0.0,
-        "recall": 0.0,
-        "f1": 0.0,
-        "support": 1
+        "precision": 0.2857,
+        "recall": 0.2857,
+        "f1": 0.2857,
+        "support": 7
       },
       "cyberbullying": {
-        "precision": 0.8,
-        "recall": 1.0,
-        "f1": 0.8889,
-        "support": 4
+        "precision": 0.6875,
+        "recall": 0.6875,
+        "f1": 0.6875,
+        "support": 16
       }
     },
     "implicitness_breakdown": {
       "E0": {
-        "count": 3,
-        "correct": 2,
-        "accuracy": 0.6667,
-        "macro_f1": 0.4
+        "count": 11,
+        "correct": 5,
+        "accuracy": 0.4545,
+        "macro_f1": 0.45
       },
       "E1": {
-        "count": 2,
-        "correct": 2,
-        "accuracy": 1.0,
-        "macro_f1": 1.0
+        "count": 12,
+        "correct": 8,
+        "accuracy": 0.6667,
+        "macro_f1": 0.4
       }
     },
     "type_breakdown": {
+      "BSH": {
+        "count": 3,
+        "correct": 1,
+        "accuracy": 0.3333
+      },
       "INS": {
+        "count": 6,
+        "correct": 4,
+        "accuracy": 0.6667
+      },
+      "NONE": {
+        "count": 7,
+        "correct": 2,
+        "accuracy": 0.2857
+      },
+      "SAR": {
         "count": 4,
         "correct": 4,
         "accuracy": 1.0
       },
-      "NONE": {
+      "SEX": {
         "count": 1,
-        "correct": 0,
-        "accuracy": 0.0
+        "correct": 1,
+        "accuracy": 1.0
+      },
+      "SHM": {
+        "count": 2,
+        "correct": 1,
+        "accuracy": 0.5
       }
     },
     "error_analysis": {
-      "false_positive_count": 1,
-      "false_negative_count": 0,
-      "false_positive_rate": 1.0,
-      "false_negative_rate": 0.0,
+      "false_positive_count": 5,
+      "false_negative_count": 5,
+      "false_positive_rate": 0.7143,
+      "false_negative_rate": 0.3125,
       "fp_samples": [
         {
-          "text": "Kue Koncol",
-          "prob": 0.7711,
+          "text": "Beli alat gym aja kak",
+          "prob": 0.6491,
+          "implicit_level": "E0"
+        },
+        {
+          "text": "Jealorely",
+          "prob": 0.654,
+          "implicit_level": "E0"
+        },
+        {
+          "text": "manyunan kematian",
+          "prob": 0.5909,
+          "implicit_level": "E0"
+        },
+        {
+          "text": "senyum logo arsenal berkah",
+          "prob": 0.5954,
+          "implicit_level": "E0"
+        },
+        {
+          "text": "idungnya.. ????",
+          "prob": 0.7307,
           "implicit_level": "E0"
         }
       ],
-      "fn_samples": []
+      "fn_samples": [
+        {
+          "text": "malu ga si bang @user Wardani si paling tau jepang ?????????? baru mau kejepang udah bikin malu wkwkwkwkw",
+          "prob": 0.4473,
+          "implicit_level": "E1",
+          "type": "SHM"
+        },
+        {
+          "text": "maju lo semua yang bilang tasyi mirip Buzz, gua kan skrg tiap liat tasyi jadi bayangin Buzz",
+          "prob": 0.4575,
+          "implicit_level": "E1",
+          "type": "INS"
+        },
+        {
+          "text": "mon maap sejak kapan bright bibirny maju",
+          "prob": 0.4746,
+          "implicit_level": "E1",
+          "type": "BSH"
+        },
+        {
+          "text": "kok jadi gitu cokk mata nya",
+          "prob": 0.5374,
+          "implicit_level": "E1",
+          "type": "BSH"
+        },
+        {
+          "text": "dasar miskin",
+          "prob": 0.4365,
+          "implicit_level": "E0",
+          "type": "INS"
+        }
+      ]
     },
     "model_name": "E3. Full Hybrid Transformer-LLM Fusion",
     "fusion_mode": "gated",
     "ablation_mask_mode": "none",
-    "mean_gating_z": 0.4941,
+    "mean_gating_z": 0.4964,
     "multi_task_heads_test": {
       "type": {
-        "support": 5,
-        "accuracy": 0.2,
-        "macro_f1": 0.1667
+        "support": 23,
+        "accuracy": 0.3478,
+        "macro_f1": 0.1436
       },
       "emotion": {
-        "support": 5,
-        "accuracy": 0.4,
-        "macro_f1": 0.1905
+        "support": 23,
+        "accuracy": 0.6522,
+        "macro_f1": 0.3299
       },
       "cultural": {
-        "support": 5,
-        "accuracy": 0.2,
-        "macro_f1": 0.1111
+        "support": 23,
+        "accuracy": 0.3913,
+        "macro_f1": 0.1406
       },
       "implicit": {
-        "support": 5,
-        "accuracy": 0.4,
-        "macro_f1": 0.2667
+        "support": 23,
+        "accuracy": 0.6957,
+        "macro_f1": 0.6957
       },
       "severity": {
-        "support": 5,
-        "accuracy": 0.2,
-        "macro_f1": 0.1667
+        "support": 23,
+        "accuracy": 0.5217,
+        "macro_f1": 0.2724
       }
     }
   },
-  "checkpoint_location": "/Users/harlengilbertsimanullang/Documents/Disertasi/LLM-Augmented Explainable/iicd_annotation_app/output/models/hybrid_fusion_indobertweet/best_hybrid_model.pt",
+  "checkpoint_location": "output/models/hybrid_fusion_indobertweet/best_hybrid_model.pt",
+  "checkpoint_location_absolute": "/Users/harlengilbertsimanullang/Documents/Disertasi/LLM-Augmented Explainable/iicd_annotation_app/output/models/hybrid_fusion_indobertweet/best_hybrid_model.pt",
   "git_storage_note": "Bobot biner model (.pt/.safetensors) dikecualikan dari Git melalui .gitignore; simpan secara lokal atau pada external artifact storage.",
   "multi_task_heads_test": {
     "type": {
-      "support": 5,
-      "accuracy": 0.2,
-      "macro_f1": 0.1667
+      "support": 23,
+      "accuracy": 0.3478,
+      "macro_f1": 0.1436
     },
     "emotion": {
-      "support": 5,
-      "accuracy": 0.4,
-      "macro_f1": 0.1905
+      "support": 23,
+      "accuracy": 0.6522,
+      "macro_f1": 0.3299
     },
     "cultural": {
-      "support": 5,
-      "accuracy": 0.2,
-      "macro_f1": 0.1111
+      "support": 23,
+      "accuracy": 0.3913,
+      "macro_f1": 0.1406
     },
     "implicit": {
-      "support": 5,
-      "accuracy": 0.4,
-      "macro_f1": 0.2667
+      "support": 23,
+      "accuracy": 0.6957,
+      "macro_f1": 0.6957
     },
     "severity": {
-      "support": 5,
-      "accuracy": 0.2,
-      "macro_f1": 0.1667
+      "support": 23,
+      "accuracy": 0.5217,
+      "macro_f1": 0.2724
     }
   },
   "evaluation_mode": "full_dual_stream_pseudo_label_agreement",

@@ -89,21 +89,19 @@ Menghasilkan vektor representasi semantik padat (*dense embeddings*) dari kalima
    - Dimensi output: $d = 768$.
    - Keunggulan: Sangat kuat menangani teks *code-mixing* (campuran Bahasa Indonesia, Inggris, dan bahasa daerah) serta transfer representasi lintas-bahasa.
 
-#### Modul B: LLM Knowledge Module (Ekstraksi Berbasis SumoPod API)
-Menggunakan **SumoPod AI Gateway API** (Meta LLaMA-3 8B Instruct) secara cloud berkecepatan tinggi:
-1. **Vektor Probabilitas Taksonomi ($\mathbf{v}_{\text{llm-prob}} \in \mathbb{R}^{33}$)**:
-   Mengekstrak distribusi probabilitas multi-dimensi terbobot skor keyakinan (*confidence*) langsung dari inferensi LLaMA-3:
-   - $\mathbf{p}_{\text{cb}} \in \mathbb{R}^2$: Probabilitas Cyberbullying ($[\text{NO}, \text{YES}]$)
-   - $\mathbf{p}_{\text{type}} \in \mathbb{R}^9$: Distribusi Tipe Hinaan ($[\text{INS}, \text{BSH}, \text{SHM}, \text{SAR}, \text{THR}, \text{DIS}, \text{SEX}, \text{EXC}, \text{NONE}]$)
-   - $\mathbf{p}_{\text{emo}} \in \mathbb{R}^6$: Distribusi Emosi Afektif ($[\text{ANG}, \text{DIS}, \text{HUM}, \text{MOCK}, \text{SAD}, \text{NEU}]$)
-   - $\mathbf{p}_{\text{cult}} \in \mathbb{R}^8$: Distribusi Konteks Budaya ($[\text{APP}, \text{INT}, \text{STA}, \text{FAM}, \text{EDU}, \text{REG}, \text{GEN}, \text{NONE}]$)
-   - $\mathbf{p}_{\text{impl}} \in \mathbb{R}^3$: Distribusi Keterbukaan Ujaran ($[\text{E0}, \text{E1}, \text{E2}]$)
-   - $\mathbf{p}_{\text{sev}} \in \mathbb{R}^4$: Distribusi Keparahan ($[\text{LOW}, \text{MEDIUM}, \text{HIGH}, \text{NONE}]$)
-   - $c_{\text{conf}} \in \mathbb{R}^1$: Nilai Skalar Confidence Numerik $[0.0, 1.0]$
-   $$\mathbf{v}_{\text{llm-prob}} = [\mathbf{p}_{\text{cb}} \,\|\, \mathbf{p}_{\text{type}} \,\|\, \mathbf{p}_{\text{emo}} \,\|\, \mathbf{p}_{\text{cult}} \,\|\, \mathbf{p}_{\text{impl}} \,\|\, \mathbf{p}_{\text{sev}} \,\|\, c_{\text{conf}}] \in \mathbb{R}^{33}$$
-2. **Teks Penalaran Terstruktur (*Structured Chain-of-Thought Rationale*)**:
-   - Menghasilkan narasi penalaran kultural dan etika sosial dalam format terstruktur: *Target Identification*, *Cultural Sensitivity Point*, dan *Harm Intent*.
-   - Digabungkan ke dalam input Transformer sebagai *Cross-Sequence Conditioning*: `[CLS] komentar [SEP] penalaran_LLM [SEP]`.
+#### Modul B: LLM Knowledge Module (Ekstraksi Berbasis SumoPod AI Gateway)
+Menggunakan **SumoPod AI Gateway API** (`deepseek-ai/DeepSeek-V3`, `deepseek-v4.1-flash:netra`) secara cloud berkecepatan tinggi dengan prompt terstandarisasi (`iicd-v3.0-sumopod`):
+1. **Vektor Representasi Bukti Kontekstual Non-Leaky ($\mathbf{v}_{\text{llm-cues}} \in \mathbb{R}^{33}$)**:
+   Mengekstrak sinyal bukti kontekstual 5-keluarga independen tanpa menyalin label target klasifikasi:
+   - $\mathbf{c}_{\text{ling}} \in \mathbb{R}^7$: Sinyal Bukti Linguistik (*derogatory lexical, metaphor/simile, rhetorical punct, elongation, slang, 2nd-person target, negation*)
+   - $\mathbf{c}_{\text{cult}} \in \mathbb{R}^7$: Sinyal Bukti Kultural (*regional dialect, appearance norm, competence norm, status hierarchy, family kinship, education norm, gender identity*)
+   - $\mathbf{c}_{\text{emo}} \in \mathbb{R}^7$: Sinyal Bukti Emosional (*hostility aggression, derision ridicule, disgust contempt, humiliation shaming, sadness distress, calm neutral register, sarcastic emoji*)
+   - $\mathbf{c}_{\text{prag}} \in \mathbb{R}^6$: Sinyal Bukti Pragmatik (*irony sarcasm, presupposition insinuation, indirect advice framing, hyperbole, imperative attack, benign supportive*)
+   - $\mathbf{c}_{\text{ctx}} \in \mathbb{R}^6$: Sinyal Kontekstual & Keyakinan (*direct addressee, public platform stage, evaluative judgment, harm impact evidence, reply/provocation marker, uncalibrated confidence scalar*)
+   $$\mathbf{v}_{\text{llm-cues}} = [\mathbf{c}_{\text{ling}} \,\|\, \mathbf{c}_{\text{cult}} \,\|\, \mathbf{c}_{\text{emo}} \,\|\, \mathbf{c}_{\text{prag}} \,\|\, \mathbf{c}_{\text{ctx}}] \in \mathbb{R}^{33}$$
+2. **Chain-of-Thought Rationale Kualitatif**:
+   - Menghasilkan narasi penalaran kultural dan etika sosial sebagai luaran eksplanatif kualitatif yang dievaluasi secara terpisah melalui metrik XAI (Faithfulness Comprehensiveness $\Delta p$).
+   - Narasi penalaran bebas *tidak* dimasukkan sebagai fitur numerik Stream B untuk mencegah kebocoran semantik kesimpulan target (*zero semantic target leakage*).
 
 ---
 

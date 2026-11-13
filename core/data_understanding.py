@@ -391,100 +391,94 @@ CONTEXTUAL_EVIDENCE_SCHEMA = [
 # Backward-compatible schema alias
 TEACHER_FEATURE_SCHEMA = CONTEXTUAL_EVIDENCE_SCHEMA
 
-# Leksikon pola bukti non-target (bahasa Indonesia + Inggris untuk CoT rationale & komentar)
+# Leksikon pola bukti non-target murni bahasa Indonesia (hanya dicocokkan pada teks komentar)
 _CUE_LEXICONS: Dict[str, List[str]] = {
     "ling_derogatory": [
         "bego", "tolol", "idiot", "goblok", "bodoh", "anjing", "babi", "bangsat", "bajingan",
-        "hama", "sampah", "jelek", "dekil", "burik", "insult", "derogatory", "profanity",
-        "offensive", "slur", "name-calling", "calling someone", "penghinaan", "makian", "cercaan",
+        "hama", "sampah", "jelek", "dekil", "burik", "kampret", "kontol", "memek", "tai",
+        "cabul", "makian", "cercaan", "norak", "alay",
     ],
     "ling_metaphor": [
-        "mirip", "seperti", "kayak", "bagai", "laksana", "compares", "comparison", "metaphor",
-        "simile", "analog", "membandingkan", "umpama", "ursula", "segentong", "monster",
+        "mirip", "seperti", "kayak", "bagai", "laksana", "umpama", "ibarat", "segentong",
+        "monster", "tapir", "ursula", "badut", "monyet",
     ],
     "cult_appearance": [
         "gemuk", "gendut", "kurus", "pendek", "jerawat", "behel", "gigi", "wajah", "muka",
-        "badan", "tubuh", "weight", "overweight", "ugly", "appearance", "looks", "physical",
-        "body shaming", "eating habits", "braces", "teeth", "outfit", "makeup", "fisik", "penampilan",
+        "badan", "tubuh", "item", "hitam", "dekil", "buruk rupa", "pesek", "tonggos", "bopeng",
+        "muka lu", "perawatan",
     ],
     "cult_competence": [
-        "otak", "iq", "pintar", "cerdas", "bodoh", "tolol", "bego", "dungu", "intelligence",
-        "stupid", "worth", "damage", "incompetent", "ability", "kecerdasan", "kemampuan", "nilai",
+        "otak", "iq", "pintar", "cerdas", "bodoh", "tolol", "bego", "dungu", "sotoy",
+        "sok tau", "sok pintar", "sok ngerti", "sok tahu", "gak becus", "sok pandai",
     ],
     "cult_status": [
-        "miskin", "kaya", "gembel", "kampungan", "udik", "norak", "status", "economic",
-        "wealth", "class", "social standing", "ekonomi", "strata", "pansos", "sok kaya",
+        "miskin", "kaya", "gembel", "kampungan", "udik", "norak", "pansos", "sok kaya",
+        "okb", "murahan", "kere", "belagu", "sombong",
     ],
     "cult_family": [
-        "yatim", "piatu", "anak haram", "ibu", "bapak", "ortu", "keluarga", "family",
-        "parents", "upbringing", "keturunan", "orang tua",
+        "yatim", "piatu", "anak haram", "ibu", "bapak", "ortu", "keluarga", "emak", "babeh",
+        "keturunan", "orang tua", "suami", "istri",
     ],
     "cult_education": [
         "sekolah", "kuliah", "kampus", "sd", "smp", "sma", "sarjana", "skripsi", "guru",
-        "dosen", "education", "school", "academic", "pendidikan", "lulusan",
+        "dosen", "ijazah", "lulusan",
     ],
     "cult_gender": [
         "bencong", "banci", "lonte", "jalang", "pelacur", "perawan", "janda", "cewek",
-        "gender", "sexist", "feminine", "masculine", "harassment", "seksual",
+        "cowo", "cowok",
     ],
     "emo_hostility": [
-        "bunuh", "mati", "hajar", "gampar", "angry", "anger", "hostil", "aggres", "threat",
-        "violent", "rage", "marah", "geram", "ancam", "benci", "hate",
+        "bunuh", "mati", "hajar", "gampar", "gebuk", "marah", "geram", "ancam", "benci",
+        "mampus", "bacok", "pukul",
     ],
     "emo_derision": [
-        "haha", "wkwk", "wk", "kwkw", "mock", "mocking", "ridicul", "teas", "laugh",
-        "ejek", "olok", "menertawakan", "cemooh", "ngeledek", "ledek",
+        "haha", "wkwk", "wk", "kwkw", "xixixi", "wkwkwk", "ejek", "olok", "menertawakan",
+        "cemooh", "ngeledek", "ledek", "geli", "lucu", "kocak",
     ],
     "emo_disgust": [
-        "jijik", "muak", "muntah", "najis", "cringe", "disgust", "repuls", "gross", "sick",
+        "jijik", "muak", "muntah", "najis", "cringe", "eneg", "enek", "jiji", "mules",
     ],
     "emo_humiliation": [
-        "malu", "dipermalukan", "aib", "humiliat", "embarrass", "shaming", "degrad", "worthless",
-        "rendah", "hina",
+        "malu", "aib", "mempermalukan", "bikin malu", "malu-maluin", "malu2in", "rendah", "hina",
     ],
     "emo_sadness": [
-        "sedih", "menangis", "kasihan", "miris", "sad", "distress", "pity", "sorrow", "hurt",
+        "sedih", "menangis", "nangis", "kasihan", "miris", "kecewa", "sakit hati", "terluka",
     ],
     "emo_neutral_calm": [
-        "neutral", "netral", "question", "asking", "suggestion", "reminder", "benign",
-        "without any", "no insulting", "does not contain", "tanpa indikasi", "pertanyaan biasa",
-        "informatif", "positif", "semangat", "mendukung", "helpful",
+        "terima kasih", "makasih", "semangat", "sukses", "sehat selalu", "alhamdulillah",
+        "bagus", "keren", "mantap", "info", "tanya", "bertanya", "saran",
     ],
     "prag_irony": [
-        "sarcas", "ironi", "irony", "satir", "sindir", "sinis", "rhetoric", "retoris",
-        "exaggerat", "cynic", "sindiran", "bercanda kasar",
+        "hebat ya", "bagus ya", "pintar sekali", "keren bgt", "paling tahu", "si paling",
+        "paling bener", "paling suci",
     ],
     "prag_presupposition": [
-        "impl", "suggest", "presuppos", "menyirat", "tersirat", "tersembunyi", "indirect",
-        "subtle", "semi-implicit", "berarti", "menuduh", "insinuat",
+        "ternyata", "katanya", "tumben", "ngakunya", "sok-sokan", "pura-pura", "pantesan",
+        "patut dipertanyakan",
     ],
     "prag_indirect_advice": [
-        "minimal", "beli ", "pake ", "pakai ", "mending", "coba ", "sebaiknya", "advice",
-        "reminder", "recommend", "suggestion", "kepikir", "kepikiran",
+        "minimal", "mending", "coba deh", "sebaiknya", "kudunya", "harusnya", "pake otak",
+        "cuci muka", "ngaca",
     ],
     "prag_hyperbole": [
-        "banget", "segentong", "sedunia", "seumur", "sampai mati", "gulung tikar",
-        "exaggerat", "overstat", "hyperbol", "excessively",
+        "banget", "parah", "kebangetan", "sedunia", "seumur hidup", "selangit", "mati rasa", "bgt",
     ],
     "prag_imperative": [
-        "mati aja", "diam", "minggat", "pergi", "jangan", "mampus", "sana", "command",
-        "imperative", "telling them to",
+        "mati aja", "diam lu", "minggat", "pergi sana", "jangan sok", "mampus lu", "tutup mulut", "enyah",
     ],
     "prag_benign": [
-        "no insulting", "does not contain", "no harmful", "neutral question", "supportive",
-        "encourag", "tanpa unsur", "bukan perundungan", "positif", "semangat", "saran baik",
+        "semoga", "salam", "terima kasih", "sukses selalu", "semangat kak", "bismillah",
+        "izin bertanya", "mohon maaf",
     ],
     "ctx_public_stage": [
-        "tiktok", "ig", "instagram", "twitter", "x ", "youtube", "netizen", "followers",
-        "viral", "fyp", "konten", "public", "sosmed", "media sosial",
+        "tiktok", "ig", "instagram", "twitter", "x", "youtube", "netizen", "followers",
+        "fyp", "konten", "sosmed", "selebgram", "viral", "publik",
     ],
     "ctx_evaluative": [
-        "stylenya", "kelakuan", "sifat", "mental", "judge", "evaluat", "critic", "commenting on",
-        "penilaian", "menilai", "menghakimi",
+        "kelakuan", "sifat", "akhlak", "moral", "gaya", "kelakuan lu", "tingkah", "bakat",
     ],
     "ctx_harm_evidence": [
-        "harm", "cyberbullying", "bullying", "insulting", "humiliating", "attack",
-        "perundungan", "merendahkan", "menyakiti", "buruk", "negative impact",
+        "menyakiti", "sakit hati", "merusak", "hancur", "menangis", "tersinggung", "aib", "kecewa",
     ],
 }
 
@@ -529,22 +523,26 @@ def extract_contextual_evidence_vector(
     """
     Membangun vektor Representasi Bukti Kontekstual LLM 33-dimensi (Stream B) secara NON-LEAKY.
 
-    KONTRAK METODOLOGIS KRITIS:
+    KONTRAK METODOLOGIS KRITIS (ANTI-LEAKAGE):
     - Fungsi ini secara eksplisit DILARANG membaca kolom label target klasifikasi
       (`cyberbullying`, `type`, `emotion`, `cultural_context`, `implicit_level`, `severity`, `target_*`, `label`).
+    - Fungsi ini secara eksplisit DILARANG mengekstrak kata kesimpulan klasifikasi dari teks bebas `explanation` (CoT rationale).
+      Pencocokan leksikal dilakukan murni pada teks komentar asli (`comment` / `comment_normalized`).
     - Sumber bukti berasal murni dari:
-      1. Sinyal teks komentar (`comment` / `comment_normalized`) dan leksikon sosio-pragmatik/dialek/emoji.
-      2. Teks penalaran CoT LLM (`explanation` / `llm_explanation`).
-      3. Kamus terstruktur `contextual_cues` dari SumoPod (`iicd-v3.0-sumopod`) bila tersedia.
-      4. Skalar kepercayaan mentah LLM (`confidence` terkalibrasi-terbatas dalam [0.0, 1.0] sebagai dimensi prior ke-33).
+      1. Sinyal teks komentar asli & ternormalisasi (leksikon dialek, slang, tanda baca, emoji, kata afektif).
+      2. Kamus terstruktur `contextual_cues` dari respons LLM (`iicd-v3.0-sumopod`) bila tersedia.
+      3. Skalar kepercayaan mentah LLM (`confidence` dalam [0.0, 1.0] sebagai dimensi prior ke-33).
     """
     raw_comment = str(
         text if text is not None else annotation_dict.get("comment", annotation_dict.get("comment_normalized", ""))
     )
     comment_lower = raw_comment.lower()
     norm_comment = clean_and_normalize_social_text(raw_comment).lower()
-    cot_exp = str(annotation_dict.get("llm_explanation", annotation_dict.get("explanation", ""))).lower().strip()
-    evidence_blob = f"{norm_comment} {cot_exp}".strip()
+    
+    # ANTI-LEAKAGE INVARIANCE:
+    # Pencocokan leksikon bukti dilakukan secara ketat pada teks komentar asli,
+    # BUKAN pada kalimat penalaran (explanation) agar tidak terjadi kebocoran kata kesimpulan label.
+    evidence_blob = norm_comment.strip()
 
     cues = _parse_cues_dict(annotation_dict.get("contextual_cues"))
     ling_c = cues.get("linguistic", {}) if isinstance(cues.get("linguistic"), dict) else {}
@@ -600,7 +598,7 @@ def extract_contextual_evidence_vector(
     emo_disg = _blend_cue(_get_cue(emo_c, "disgust_contempt"), _keyword_score(evidence_blob, _CUE_LEXICONS["emo_disgust"], cap=2))
     emo_humil = _blend_cue(_get_cue(emo_c, "humiliation_shaming"), _keyword_score(evidence_blob, _CUE_LEXICONS["emo_humiliation"], cap=2))
     emo_sad = _blend_cue(_get_cue(emo_c, "sadness_distress"), _keyword_score(evidence_blob, _CUE_LEXICONS["emo_sadness"], cap=2))
-    emo_neu = round(_keyword_score(cot_exp if cot_exp else evidence_blob, _CUE_LEXICONS["emo_neutral_calm"], cap=2), 4)
+    emo_neu = round(_keyword_score(evidence_blob, _CUE_LEXICONS["emo_neutral_calm"], cap=2), 4)
     em_hits = sum(1 for em in _SARCASTIC_EMOJIS if em in raw_comment)
     emo_emoji = round(min(1.0, em_hits / 2.0), 4)
 
@@ -612,16 +610,16 @@ def extract_contextual_evidence_vector(
     prag_advice = _blend_cue(_get_cue(prag_c, "indirect_advice"), _keyword_score(evidence_blob, _CUE_LEXICONS["prag_indirect_advice"], cap=2))
     prag_hyper = round(_keyword_score(evidence_blob, _CUE_LEXICONS["prag_hyperbole"], cap=2), 4)
     prag_imper = round(_keyword_score(evidence_blob, _CUE_LEXICONS["prag_imperative"], cap=2), 4)
-    prag_benign = _blend_cue(_get_cue(prag_c, "benign_supportive"), _keyword_score(cot_exp if cot_exp else evidence_blob, _CUE_LEXICONS["prag_benign"], cap=2))
+    prag_benign = _blend_cue(_get_cue(prag_c, "benign_supportive"), _keyword_score(evidence_blob, _CUE_LEXICONS["prag_benign"], cap=2))
 
     pragmatic_vec = [prag_irony, prag_presup, prag_advice, prag_hyper, prag_imper, prag_benign]
 
     # --- 5. CONTEXTUAL & EPISTEMIC CUES (Dims 27..32, 6D) ---
-    addressee_heur = 1.0 if ("@" in raw_comment or ling_2nd > 0 or "target" in cot_exp or "person" in cot_exp) else 0.0
+    addressee_heur = 1.0 if ("@" in raw_comment or ling_2nd > 0) else 0.0
     ctx_addr = _blend_cue(_get_cue(ctx_c, "direct_addressee"), addressee_heur)
     ctx_stage = _blend_cue(_get_cue(ctx_c, "public_stage"), _keyword_score(evidence_blob, _CUE_LEXICONS["ctx_public_stage"], cap=2))
     ctx_eval = _blend_cue(_get_cue(ctx_c, "evaluative_judgment"), _keyword_score(evidence_blob, _CUE_LEXICONS["ctx_evaluative"], cap=2))
-    ctx_harm = _blend_cue(_get_cue(ctx_c, "harm_impact_evidence"), _keyword_score(cot_exp if cot_exp else evidence_blob, _CUE_LEXICONS["ctx_harm_evidence"], cap=2))
+    ctx_harm = _blend_cue(_get_cue(ctx_c, "harm_impact_evidence"), _keyword_score(evidence_blob, _CUE_LEXICONS["ctx_harm_evidence"], cap=2))
     ctx_reply = 1.0 if (raw_comment.strip().startswith("@") or "?" in raw_comment or any(k in comment_lower for k in ["balas", "reply", "makanya", "dari mulut"])) else 0.0
 
     raw_conf = annotation_dict.get("llm_confidence", annotation_dict.get("confidence", None))

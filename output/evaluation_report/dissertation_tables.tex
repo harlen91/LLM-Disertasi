@@ -3,22 +3,22 @@
 % ===============================================================
 \begin{table}[htbp]
 \centering
-\caption{Metrik Evaluasi Komprehensif pada Data Uji (Test Set, $\tau^*=0.20$)}
+\caption{Metrik Evaluasi Komprehensif pada Data Uji (Test Set, $\tau^*=0.54$)}
 \label{tab:overall_performance}
 \begin{tabular}{lc}
 \hline
 \textbf{Metrik Evaluasi} & \textbf{Nilai (95\% Bootstrap CI)} \\
 \hline
-Accuracy & 0.8000 ([0.4, 1.0]) \\
-\textbf{Macro F1-Score} & \textbf{0.4444} ([0.2857, 1.0]) \\
-Weighted F1-Score & 0.7111 \\
-Macro Precision & 0.4000 \\
-Macro Recall & 0.5000 \\
-ROC-AUC & 0.0 ([0.0, 0.0]) \\
-PR-AUC & 0.6792 ([0.325, 0.7625]) \\
-Expected Calibration Error (ECE) & 0.5124 \\
-Brier Score & 0.2797 \\
-Log-Loss & 0.7706 \\
+Accuracy & 0.5652 ([0.3913, 0.7391]) \\
+\textbf{Macro F1-Score} & \textbf{0.4866} ([0.303, 0.6734]) \\
+Weighted F1-Score & 0.5652 \\
+Macro Precision & 0.4866 \\
+Macro Recall & 0.4866 \\
+ROC-AUC & 0.3929 ([0.13, 0.6776]) \\
+PR-AUC & 0.6389 ([0.4649, 0.9131]) \\
+Expected Calibration Error (ECE) & 0.1534 \\
+Brier Score & 0.2428 \\
+Log-Loss & 0.6799 \\
 \hline
 \end{tabular}
 \end{table}
@@ -34,10 +34,10 @@ Log-Loss & 0.7706 \\
 \hline
 \textbf{Kelas} & \textbf{Precision} & \textbf{Recall} & \textbf{F1-Score} & \textbf{Support} \\
 \hline
-Non-Cyberbullying (0) & 0.0000 & 0.0000 & 0.0000 & 1 \\
-Cyberbullying (1) & 0.8000 & 1.0000 & 0.8889 & 4 \\
+Non-Cyberbullying (0) & 0.2857 & 0.2857 & 0.2857 & 7 \\
+Cyberbullying (1) & 0.6875 & 0.6875 & 0.6875 & 16 \\
 \hline
-\multicolumn{5}{l}{\footnotesize \textit{Confusion Matrix: TN=0, FP=1, FN=0, TP=4}} \\
+\multicolumn{5}{l}{\footnotesize \textit{Confusion Matrix: TN=2, FP=5, FN=5, TP=11}} \\
 \end{tabular}
 \end{table}
 
@@ -52,8 +52,8 @@ Cyberbullying (1) & 0.8000 & 1.0000 & 0.8889 & 4 \\
 \hline
 \textbf{Tingkat} & \textbf{Support} & \textbf{Akurasi (\%)} & \textbf{Macro-F1} \\
 \hline
-E0 & 3 & 66.67\% & 0.4000 \\
-E1 & 2 & 100.00\% & 1.0000 \\
+E0 & 11 & 45.45\% & 0.4500 \\
+E1 & 12 & 66.67\% & 0.4000 \\
 \hline
 \end{tabular}
 \end{table}
@@ -69,12 +69,12 @@ E1 & 2 & 100.00\% & 1.0000 \\
 \hline
 \textbf{Eksperimen} & \textbf{Accuracy} & \textbf{Macro-F1} & \textbf{ROC-AUC} & \textbf{PR-AUC} & \textbf{Gate $z$} \\
 \hline
-E1. Transformer-Only Baseline (Stream A) & 0.8000 & 0.4444 & 0.0 & 0.6792 & 0.4970 \\
-E2. LLM Knowledge-Only Model (33D Contextual Cues) & 0.8000 & 0.7619 & 1.0 & 1.0 & - \\
-E3. Full Hybrid Transformer-LLM Fusion & 0.8000 & 0.4444 & 0.0 & 0.6792 & 0.4941 \\
-E4. Hybrid without Cultural Knowledge & 0.8000 & 0.4444 & 0.0 & 0.6792 & 0.4943 \\
-E5. Hybrid without Emotional Knowledge & 0.8000 & 0.4444 & 0.0 & 0.6792 & 0.4937 \\
-E6. Hybrid without Gated Fusion (Concat) & 0.8000 & 0.4444 & 1.0 & 1.0 & 0.5000 \\
+E1. Transformer-Only Baseline (Stream A) & 0.6522 & 0.3947 & 0.5089 & 0.7191 & 0.4902 \\
+E2. LLM Knowledge-Only Model (33D Contextual Cues) & 0.9130 & 0.8873 & 0.9777 & 0.9891 & - \\
+E3. Full Hybrid Transformer-LLM Fusion & 0.5652 & 0.4866 & 0.3929 & 0.6389 & 0.4964 \\
+E4. Hybrid without Cultural Knowledge & 0.5217 & 0.4868 & 0.4643 & 0.6782 & 0.4966 \\
+E5. Hybrid without Emotional Knowledge & 0.6087 & 0.4623 & 0.4018 & 0.6412 & 0.4988 \\
+E6. Hybrid without Gated Fusion (Concat) & 0.5217 & 0.5217 & 0.6071 & 0.8313 & 0.5000 \\
 \hline
 \end{tabular}
 \end{table}

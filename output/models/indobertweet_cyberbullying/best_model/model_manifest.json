@@ -2,11 +2,11 @@
   "model_architecture": "IndoBERTweet Baseline SequenceClassifier",
   "pretrained_model": "indolem/indobertweet-base-uncased",
   "model_version": "2.0.0",
-  "dataset_version": "iicd-curated-8ee578088376",
+  "dataset_version": "iicd-curated-b2a6c856eeee",
   "target_source": "pseudo_labeled_llm",
-  "training_date": "2026-11-12T08:11:55.244804+00:00",
+  "training_date": "2026-11-13T03:58:07.334708+00:00",
   "random_seed": 42,
-  "optimal_threshold": 0.2,
+  "optimal_threshold": 0.62,
   "threshold_selection_split": "validation",
   "taxonomy": {
     "cyberbullying": [
@@ -65,112 +65,162 @@
     "text_column": "comment_normalized"
   },
   "evaluation_metrics": {
-    "threshold": 0.2,
-    "support": 5,
-    "accuracy": 0.8,
-    "macro_precision": 0.4,
-    "macro_recall": 0.5,
-    "macro_f1": 0.4444,
-    "weighted_precision": 0.64,
-    "weighted_recall": 0.8,
-    "weighted_f1": 0.7111,
-    "roc_auc": 0.25,
-    "pr_auc": 0.8042,
+    "threshold": 0.62,
+    "support": 23,
+    "accuracy": 0.7391,
+    "macro_precision": 0.692,
+    "macro_recall": 0.692,
+    "macro_f1": 0.692,
+    "weighted_precision": 0.7391,
+    "weighted_recall": 0.7391,
+    "weighted_f1": 0.7391,
+    "roc_auc": 0.8036,
+    "pr_auc": 0.901,
     "calibration": {
-      "ece": 0.2871,
-      "mce": 0.4288,
-      "brier_score": 0.2098,
-      "log_loss": 0.6113
+      "ece": 0.1299,
+      "mce": 0.4659,
+      "brier_score": 0.18,
+      "log_loss": 0.5447
     },
     "confidence_intervals_95": {
       "accuracy": [
-        0.4,
-        1.0
+        0.5217,
+        0.913
       ],
       "macro_f1": [
-        0.2857,
-        1.0
+        0.4623,
+        0.8973
       ],
       "roc_auc": [
-        0.0,
-        0.75
+        0.5579,
+        1.0
       ],
       "pr_auc": [
-        0.4,
-        0.95
+        0.7631,
+        1.0
       ]
     },
     "confusion_matrix": {
-      "tn": 0,
-      "fp": 1,
-      "fn": 0,
-      "tp": 4
+      "tn": 4,
+      "fp": 3,
+      "fn": 3,
+      "tp": 13
     },
     "confusion_matrix_2x2": [
       [
-        0,
-        1
+        4,
+        3
       ],
       [
-        0,
-        4
+        3,
+        13
       ]
     ],
     "per_class": {
       "non_cyberbullying": {
-        "precision": 0.0,
-        "recall": 0.0,
-        "f1": 0.0,
-        "support": 1
+        "precision": 0.5714,
+        "recall": 0.5714,
+        "f1": 0.5714,
+        "support": 7
       },
       "cyberbullying": {
-        "precision": 0.8,
-        "recall": 1.0,
-        "f1": 0.8889,
-        "support": 4
+        "precision": 0.8125,
+        "recall": 0.8125,
+        "f1": 0.8125,
+        "support": 16
       }
     },
     "implicitness_breakdown": {
       "E0": {
-        "count": 3,
-        "correct": 2,
-        "accuracy": 0.6667,
-        "macro_f1": 0.4
+        "count": 11,
+        "correct": 6,
+        "accuracy": 0.5455,
+        "macro_f1": 0.5299
       },
       "E1": {
-        "count": 2,
-        "correct": 2,
-        "accuracy": 1.0,
-        "macro_f1": 1.0
+        "count": 12,
+        "correct": 11,
+        "accuracy": 0.9167,
+        "macro_f1": 0.4783
       }
     },
     "type_breakdown": {
-      "INS": {
-        "count": 4,
-        "correct": 4,
+      "BSH": {
+        "count": 3,
+        "correct": 3,
         "accuracy": 1.0
       },
+      "INS": {
+        "count": 6,
+        "correct": 5,
+        "accuracy": 0.8333
+      },
       "NONE": {
+        "count": 7,
+        "correct": 4,
+        "accuracy": 0.5714
+      },
+      "SAR": {
+        "count": 4,
+        "correct": 3,
+        "accuracy": 0.75
+      },
+      "SEX": {
         "count": 1,
         "correct": 0,
         "accuracy": 0.0
+      },
+      "SHM": {
+        "count": 2,
+        "correct": 2,
+        "accuracy": 1.0
       }
     },
     "error_analysis": {
-      "false_positive_count": 1,
-      "false_negative_count": 0,
-      "false_positive_rate": 1.0,
-      "false_negative_rate": 0.0,
+      "false_positive_count": 3,
+      "false_negative_count": 3,
+      "false_positive_rate": 0.4286,
+      "false_negative_rate": 0.1875,
       "fp_samples": [
         {
-          "text": "Kue Koncol",
-          "prob": 0.6829,
+          "text": "Beli alat gym aja kak",
+          "prob": 0.6587,
+          "implicit_level": "E0"
+        },
+        {
+          "text": "senyum logo arsenal berkah",
+          "prob": 0.6509,
+          "implicit_level": "E0"
+        },
+        {
+          "text": "idungnya.. ????",
+          "prob": 0.7354,
           "implicit_level": "E0"
         }
       ],
-      "fn_samples": []
+      "fn_samples": [
+        {
+          "text": "Selebgram kere??",
+          "prob": 0.619,
+          "implicit_level": "E0",
+          "type": "INS"
+        },
+        {
+          "text": "Wajah kue kontol Anda",
+          "prob": 0.5767,
+          "implicit_level": "E0",
+          "type": "SEX"
+        },
+        {
+          "text": "masnya butuh pengakuan kalo dia kaya ??",
+          "prob": 0.6112,
+          "implicit_level": "E1",
+          "type": "SAR"
+        }
+      ]
     }
   },
-  "checkpoint_location": "/Users/harlengilbertsimanullang/Documents/Disertasi/LLM-Augmented Explainable/iicd_annotation_app/output/models/indobertweet_cyberbullying/best_model",
+  "checkpoint_location": "output/models/indobertweet_cyberbullying/best_model",
+  "checkpoint_location_absolute": "/Users/harlengilbertsimanullang/Documents/Disertasi/LLM-Augmented Explainable/iicd_annotation_app/output/models/indobertweet_cyberbullying/best_model",
   "git_storage_note": "Bobot biner model (.pt/.safetensors) dikecualikan dari Git melalui .gitignore; simpan secara lokal atau pada external artifact storage."
 }

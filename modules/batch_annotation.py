@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import time
+import json
 from pathlib import Path
 from datetime import datetime
 
@@ -172,7 +173,7 @@ def render_batch_annotation_page():
     if start_btn:
         annotation_cols = [
             "cyberbullying", "type", "emotion", "cultural_context",
-            "implicit_level", "severity", "confidence", "explanation", "error",
+            "implicit_level", "severity", "confidence", "explanation", "contextual_cues", "error",
             "llm_model", "prompt_version", "annotated_at", "annotation_source", "is_mock"
         ]
         for col in annotation_cols:
@@ -228,7 +229,10 @@ def render_batch_annotation_page():
                 for idx, res in zip(chunk, res_list):
                     for k in annotation_cols:
                         if k in res:
-                            annotated_df.at[idx, k] = res[k]
+                            val = res[k]
+                            if k == "contextual_cues" and isinstance(val, (dict, list)):
+                                val = json.dumps(val, ensure_ascii=False)
+                            annotated_df.at[idx, k] = val
 
                     success_count += 1
                     curr_text = str(annotated_df.iloc[idx][text_column])

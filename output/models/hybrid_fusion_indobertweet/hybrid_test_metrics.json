@@ -1,234 +1,305 @@
 {
   "model_architecture": "Hybrid Dual-Stream Gated Fusion (IndoBERTweet + Non-Leaky 33D LLM Contextual Cues)",
   "pretrained_backbone": "indolem/indobertweet-base-uncased",
-  "dataset_version": "iicd-curated-8ee578088376",
+  "dataset_version": "iicd-curated-b2a6c856eeee",
   "target_source": "pseudo_labeled_llm",
   "evaluation_mode": "full_dual_stream_pseudo_label_agreement",
-  "best_epoch": 1,
-  "epochs_trained": 3,
-  "training_duration_sec": 13.4,
-  "optimal_threshold": 0.2,
+  "best_epoch": 2,
+  "epochs_trained": 4,
+  "training_duration_sec": 27.8,
+  "optimal_threshold": 0.54,
   "threshold_selection_split": "validation",
-  "mean_gating_z": 0.4941,
+  "mean_gating_z": 0.4964,
   "test_metrics": {
-    "threshold": 0.2,
-    "support": 5,
-    "accuracy": 0.8,
-    "macro_precision": 0.4,
-    "macro_recall": 0.5,
-    "macro_f1": 0.4444,
-    "weighted_precision": 0.64,
-    "weighted_recall": 0.8,
-    "weighted_f1": 0.7111,
-    "roc_auc": 0.0,
-    "pr_auc": 0.6792,
+    "threshold": 0.54,
+    "support": 23,
+    "accuracy": 0.5652,
+    "macro_precision": 0.4866,
+    "macro_recall": 0.4866,
+    "macro_f1": 0.4866,
+    "weighted_precision": 0.5652,
+    "weighted_recall": 0.5652,
+    "weighted_f1": 0.5652,
+    "roc_auc": 0.3929,
+    "pr_auc": 0.6389,
     "calibration": {
-      "ece": 0.5124,
-      "mce": 0.7711,
-      "brier_score": 0.2797,
-      "log_loss": 0.7706
+      "ece": 0.1534,
+      "mce": 0.3423,
+      "brier_score": 0.2428,
+      "log_loss": 0.6799
     },
     "confidence_intervals_95": {
       "accuracy": [
-        0.4,
-        1.0
+        0.3913,
+        0.7391
       ],
       "macro_f1": [
-        0.2857,
-        1.0
+        0.303,
+        0.6734
       ],
       "roc_auc": [
-        0.0,
-        0.0
+        0.13,
+        0.6776
       ],
       "pr_auc": [
-        0.325,
-        0.7625
+        0.4649,
+        0.9131
       ]
     },
     "confusion_matrix": {
-      "tn": 0,
-      "fp": 1,
-      "fn": 0,
-      "tp": 4
+      "tn": 2,
+      "fp": 5,
+      "fn": 5,
+      "tp": 11
     },
     "confusion_matrix_2x2": [
       [
-        0,
-        1
+        2,
+        5
       ],
       [
-        0,
-        4
+        5,
+        11
       ]
     ],
     "per_class": {
       "non_cyberbullying": {
-        "precision": 0.0,
-        "recall": 0.0,
-        "f1": 0.0,
-        "support": 1
+        "precision": 0.2857,
+        "recall": 0.2857,
+        "f1": 0.2857,
+        "support": 7
       },
       "cyberbullying": {
-        "precision": 0.8,
-        "recall": 1.0,
-        "f1": 0.8889,
-        "support": 4
+        "precision": 0.6875,
+        "recall": 0.6875,
+        "f1": 0.6875,
+        "support": 16
       }
     },
     "implicitness_breakdown": {
       "E0": {
-        "count": 3,
-        "correct": 2,
-        "accuracy": 0.6667,
-        "macro_f1": 0.4
+        "count": 11,
+        "correct": 5,
+        "accuracy": 0.4545,
+        "macro_f1": 0.45
       },
       "E1": {
-        "count": 2,
-        "correct": 2,
-        "accuracy": 1.0,
-        "macro_f1": 1.0
+        "count": 12,
+        "correct": 8,
+        "accuracy": 0.6667,
+        "macro_f1": 0.4
       }
     },
     "type_breakdown": {
+      "BSH": {
+        "count": 3,
+        "correct": 1,
+        "accuracy": 0.3333
+      },
       "INS": {
+        "count": 6,
+        "correct": 4,
+        "accuracy": 0.6667
+      },
+      "NONE": {
+        "count": 7,
+        "correct": 2,
+        "accuracy": 0.2857
+      },
+      "SAR": {
         "count": 4,
         "correct": 4,
         "accuracy": 1.0
       },
-      "NONE": {
+      "SEX": {
         "count": 1,
-        "correct": 0,
-        "accuracy": 0.0
+        "correct": 1,
+        "accuracy": 1.0
+      },
+      "SHM": {
+        "count": 2,
+        "correct": 1,
+        "accuracy": 0.5
       }
     },
     "error_analysis": {
-      "false_positive_count": 1,
-      "false_negative_count": 0,
-      "false_positive_rate": 1.0,
-      "false_negative_rate": 0.0,
+      "false_positive_count": 5,
+      "false_negative_count": 5,
+      "false_positive_rate": 0.7143,
+      "false_negative_rate": 0.3125,
       "fp_samples": [
         {
-          "text": "Kue Koncol",
-          "prob": 0.7711,
+          "text": "Beli alat gym aja kak",
+          "prob": 0.6491,
+          "implicit_level": "E0"
+        },
+        {
+          "text": "Jealorely",
+          "prob": 0.654,
+          "implicit_level": "E0"
+        },
+        {
+          "text": "manyunan kematian",
+          "prob": 0.5909,
+          "implicit_level": "E0"
+        },
+        {
+          "text": "senyum logo arsenal berkah",
+          "prob": 0.5954,
+          "implicit_level": "E0"
+        },
+        {
+          "text": "idungnya.. ????",
+          "prob": 0.7307,
           "implicit_level": "E0"
         }
       ],
-      "fn_samples": []
+      "fn_samples": [
+        {
+          "text": "malu ga si bang @user Wardani si paling tau jepang ?????????? baru mau kejepang udah bikin malu wkwkwkwkw",
+          "prob": 0.4473,
+          "implicit_level": "E1",
+          "type": "SHM"
+        },
+        {
+          "text": "maju lo semua yang bilang tasyi mirip Buzz, gua kan skrg tiap liat tasyi jadi bayangin Buzz",
+          "prob": 0.4575,
+          "implicit_level": "E1",
+          "type": "INS"
+        },
+        {
+          "text": "mon maap sejak kapan bright bibirny maju",
+          "prob": 0.4746,
+          "implicit_level": "E1",
+          "type": "BSH"
+        },
+        {
+          "text": "kok jadi gitu cokk mata nya",
+          "prob": 0.5374,
+          "implicit_level": "E1",
+          "type": "BSH"
+        },
+        {
+          "text": "dasar miskin",
+          "prob": 0.4365,
+          "implicit_level": "E0",
+          "type": "INS"
+        }
+      ]
     },
     "model_name": "E3. Full Hybrid Transformer-LLM Fusion",
     "fusion_mode": "gated",
     "ablation_mask_mode": "none",
-    "mean_gating_z": 0.4941,
+    "mean_gating_z": 0.4964,
     "multi_task_heads_test": {
       "type": {
-        "support": 5,
-        "accuracy": 0.2,
-        "macro_f1": 0.1667
+        "support": 23,
+        "accuracy": 0.3478,
+        "macro_f1": 0.1436
       },
       "emotion": {
-        "support": 5,
-        "accuracy": 0.4,
-        "macro_f1": 0.1905
+        "support": 23,
+        "accuracy": 0.6522,
+        "macro_f1": 0.3299
       },
       "cultural": {
-        "support": 5,
-        "accuracy": 0.2,
-        "macro_f1": 0.1111
+        "support": 23,
+        "accuracy": 0.3913,
+        "macro_f1": 0.1406
       },
       "implicit": {
-        "support": 5,
-        "accuracy": 0.4,
-        "macro_f1": 0.2667
+        "support": 23,
+        "accuracy": 0.6957,
+        "macro_f1": 0.6957
       },
       "severity": {
-        "support": 5,
-        "accuracy": 0.2,
-        "macro_f1": 0.1667
+        "support": 23,
+        "accuracy": 0.5217,
+        "macro_f1": 0.2724
       }
     }
   },
   "multi_task_heads_test": {
     "type": {
-      "support": 5,
-      "accuracy": 0.2,
-      "macro_f1": 0.1667
+      "support": 23,
+      "accuracy": 0.3478,
+      "macro_f1": 0.1436
     },
     "emotion": {
-      "support": 5,
-      "accuracy": 0.4,
-      "macro_f1": 0.1905
+      "support": 23,
+      "accuracy": 0.6522,
+      "macro_f1": 0.3299
     },
     "cultural": {
-      "support": 5,
-      "accuracy": 0.2,
-      "macro_f1": 0.1111
+      "support": 23,
+      "accuracy": 0.3913,
+      "macro_f1": 0.1406
     },
     "implicit": {
-      "support": 5,
-      "accuracy": 0.4,
-      "macro_f1": 0.2667
+      "support": 23,
+      "accuracy": 0.6957,
+      "macro_f1": 0.6957
     },
     "severity": {
-      "support": 5,
-      "accuracy": 0.2,
-      "macro_f1": 0.1667
+      "support": 23,
+      "accuracy": 0.5217,
+      "macro_f1": 0.2724
     }
   },
   "ablation_comparison": {
-    "test_samples": 5,
+    "test_samples": 23,
     "target_source": "pseudo_labeled_llm",
     "evaluation_mode": "full_dual_stream_active",
     "E1_transformer_only": {
-      "threshold": 0.2,
-      "support": 5,
-      "accuracy": 0.8,
-      "macro_precision": 0.4,
-      "macro_recall": 0.5,
-      "macro_f1": 0.4444,
-      "weighted_precision": 0.64,
-      "weighted_recall": 0.8,
-      "weighted_f1": 0.7111,
-      "roc_auc": 0.0,
-      "pr_auc": 0.6792,
+      "threshold": 0.5,
+      "support": 23,
+      "accuracy": 0.6522,
+      "macro_precision": 0.3409,
+      "macro_recall": 0.4688,
+      "macro_f1": 0.3947,
+      "weighted_precision": 0.4743,
+      "weighted_recall": 0.6522,
+      "weighted_f1": 0.5492,
+      "roc_auc": 0.5089,
+      "pr_auc": 0.7191,
       "calibration": {
-        "ece": 0.3964,
-        "mce": 0.8114,
-        "brier_score": 0.2008,
-        "log_loss": 0.6112
+        "ece": 0.083,
+        "mce": 0.5062,
+        "brier_score": 0.2233,
+        "log_loss": 0.6393
       },
       "confidence_intervals_95": {
         "accuracy": [
-          0.4,
-          1.0
+          0.4554,
+          0.8261
         ],
         "macro_f1": [
-          0.2857,
-          1.0
+          0.3128,
+          0.4524
         ],
         "roc_auc": [
-          0.0,
-          0.0
+          0.2275,
+          0.8055
         ],
         "pr_auc": [
-          0.325,
-          0.7625
+          0.5206,
+          0.9515
         ]
       },
       "confusion_matrix": {
         "tn": 0,
-        "fp": 1,
-        "fn": 0,
-        "tp": 4
+        "fp": 7,
+        "fn": 1,
+        "tp": 15
       },
       "confusion_matrix_2x2": [
         [
           0,
-          1
+          7
         ],
         [
-          0,
-          4
+          1,
+          15
         ]
       ],
       "per_class": {
@@ -236,716 +307,1034 @@
           "precision": 0.0,
           "recall": 0.0,
           "f1": 0.0,
-          "support": 1
+          "support": 7
         },
         "cyberbullying": {
-          "precision": 0.8,
-          "recall": 1.0,
-          "f1": 0.8889,
-          "support": 4
+          "precision": 0.6818,
+          "recall": 0.9375,
+          "f1": 0.7895,
+          "support": 16
         }
       },
       "implicitness_breakdown": {
         "E0": {
-          "count": 3,
-          "correct": 2,
-          "accuracy": 0.6667,
-          "macro_f1": 0.4
+          "count": 11,
+          "correct": 4,
+          "accuracy": 0.3636,
+          "macro_f1": 0.2667
         },
         "E1": {
-          "count": 2,
-          "correct": 2,
-          "accuracy": 1.0,
-          "macro_f1": 1.0
+          "count": 12,
+          "correct": 11,
+          "accuracy": 0.9167,
+          "macro_f1": 0.4783
         }
       },
       "type_breakdown": {
+        "BSH": {
+          "count": 3,
+          "correct": 2,
+          "accuracy": 0.6667
+        },
         "INS": {
+          "count": 6,
+          "correct": 6,
+          "accuracy": 1.0
+        },
+        "NONE": {
+          "count": 7,
+          "correct": 0,
+          "accuracy": 0.0
+        },
+        "SAR": {
           "count": 4,
           "correct": 4,
           "accuracy": 1.0
         },
-        "NONE": {
+        "SEX": {
           "count": 1,
-          "correct": 0,
-          "accuracy": 0.0
+          "correct": 1,
+          "accuracy": 1.0
+        },
+        "SHM": {
+          "count": 2,
+          "correct": 2,
+          "accuracy": 1.0
         }
       },
       "error_analysis": {
-        "false_positive_count": 1,
-        "false_negative_count": 0,
+        "false_positive_count": 7,
+        "false_negative_count": 1,
         "false_positive_rate": 1.0,
-        "false_negative_rate": 0.0,
+        "false_negative_rate": 0.0625,
         "fp_samples": [
           {
-            "text": "Kue Koncol",
-            "prob": 0.8114,
+            "text": "Beli alat gym aja kak",
+            "prob": 0.619,
+            "implicit_level": "E0"
+          },
+          {
+            "text": "Jealorely",
+            "prob": 0.6984,
+            "implicit_level": "E0"
+          },
+          {
+            "text": "Congore adalah masalahnya",
+            "prob": 0.5175,
+            "implicit_level": "E0"
+          },
+          {
+            "text": "Jangan lupa mandi",
+            "prob": 0.5785,
+            "implicit_level": "E0"
+          },
+          {
+            "text": "manyunan kematian",
+            "prob": 0.5865,
             "implicit_level": "E0"
           }
         ],
-        "fn_samples": []
+        "fn_samples": [
+          {
+            "text": "mon maap sejak kapan bright bibirny maju",
+            "prob": 0.4938,
+            "implicit_level": "E1",
+            "type": "BSH"
+          }
+        ]
       },
       "model_name": "E1. Transformer-Only Baseline (Stream A)",
       "fusion_mode": "gated",
       "ablation_mask_mode": "all_zero",
-      "mean_gating_z": 0.497,
+      "mean_gating_z": 0.4902,
       "multi_task_heads_test": {
         "type": {
-          "support": 5,
-          "accuracy": 0.2,
-          "macro_f1": 0.1333
+          "support": 23,
+          "accuracy": 0.3043,
+          "macro_f1": 0.1273
         },
         "emotion": {
-          "support": 5,
-          "accuracy": 0.6,
-          "macro_f1": 0.25
+          "support": 23,
+          "accuracy": 0.6087,
+          "macro_f1": 0.3083
         },
         "cultural": {
-          "support": 5,
-          "accuracy": 0.2,
-          "macro_f1": 0.1
+          "support": 23,
+          "accuracy": 0.3913,
+          "macro_f1": 0.1406
         },
         "implicit": {
-          "support": 5,
-          "accuracy": 0.4,
-          "macro_f1": 0.3
+          "support": 23,
+          "accuracy": 0.7391,
+          "macro_f1": 0.7386
         },
         "severity": {
-          "support": 5,
-          "accuracy": 0.2,
-          "macro_f1": 0.1333
+          "support": 23,
+          "accuracy": 0.5652,
+          "macro_f1": 0.3167
         }
       }
     },
     "E2_llm_knowledge_only": {
-      "threshold": 0.58,
-      "support": 5,
-      "accuracy": 0.8,
-      "macro_precision": 0.75,
-      "macro_recall": 0.875,
-      "macro_f1": 0.7619,
-      "weighted_precision": 0.9,
-      "weighted_recall": 0.8,
-      "weighted_f1": 0.819,
-      "roc_auc": 1.0,
-      "pr_auc": 1.0,
+      "threshold": 0.5,
+      "support": 23,
+      "accuracy": 0.913,
+      "macro_precision": 0.9444,
+      "macro_recall": 0.8571,
+      "macro_f1": 0.8873,
+      "weighted_precision": 0.9227,
+      "weighted_recall": 0.913,
+      "weighted_f1": 0.9084,
+      "roc_auc": 0.9777,
+      "pr_auc": 0.9891,
       "calibration": {
-        "ece": 0.1892,
-        "mce": 0.3281,
-        "brier_score": 0.1451,
-        "log_loss": 0.4662
+        "ece": 0.1626,
+        "mce": 0.322,
+        "brier_score": 0.092,
+        "log_loss": 0.3313
       },
       "confidence_intervals_95": {
         "accuracy": [
-          0.4,
+          0.7826,
           1.0
         ],
         "macro_f1": [
-          0.2857,
+          0.6945,
           1.0
         ],
         "roc_auc": [
-          1.0,
+          0.9111,
           1.0
         ],
         "pr_auc": [
-          1.0,
+          0.9624,
           1.0
         ]
       },
       "confusion_matrix": {
-        "tn": 1,
-        "fp": 0,
-        "fn": 1,
-        "tp": 3
+        "tn": 5,
+        "fp": 2,
+        "fn": 0,
+        "tp": 16
       },
       "confusion_matrix_2x2": [
         [
-          1,
-          0
+          5,
+          2
         ],
         [
-          1,
-          3
+          0,
+          16
         ]
       ],
       "per_class": {
         "non_cyberbullying": {
-          "precision": 0.5,
-          "recall": 1.0,
-          "f1": 0.6667,
-          "support": 1
+          "precision": 1.0,
+          "recall": 0.7143,
+          "f1": 0.8333,
+          "support": 7
         },
         "cyberbullying": {
-          "precision": 1.0,
-          "recall": 0.75,
-          "f1": 0.8571,
-          "support": 4
+          "precision": 0.8889,
+          "recall": 1.0,
+          "f1": 0.9412,
+          "support": 16
         }
       },
       "implicitness_breakdown": {
         "E0": {
-          "count": 3,
-          "correct": 2,
-          "accuracy": 0.6667,
-          "macro_f1": 0.6667
+          "count": 11,
+          "correct": 9,
+          "accuracy": 0.8182,
+          "macro_f1": 0.8167
         },
         "E1": {
-          "count": 2,
-          "correct": 2,
+          "count": 12,
+          "correct": 12,
           "accuracy": 1.0,
           "macro_f1": 1.0
         }
       },
       "type_breakdown": {
-        "INS": {
-          "count": 4,
+        "BSH": {
+          "count": 3,
           "correct": 3,
-          "accuracy": 0.75
+          "accuracy": 1.0
+        },
+        "INS": {
+          "count": 6,
+          "correct": 6,
+          "accuracy": 1.0
         },
         "NONE": {
+          "count": 7,
+          "correct": 5,
+          "accuracy": 0.7143
+        },
+        "SAR": {
+          "count": 4,
+          "correct": 4,
+          "accuracy": 1.0
+        },
+        "SEX": {
           "count": 1,
           "correct": 1,
+          "accuracy": 1.0
+        },
+        "SHM": {
+          "count": 2,
+          "correct": 2,
           "accuracy": 1.0
         }
       },
       "error_analysis": {
-        "false_positive_count": 0,
-        "false_negative_count": 1,
-        "false_positive_rate": 0.0,
-        "false_negative_rate": 0.25,
-        "fp_samples": [],
-        "fn_samples": [
+        "false_positive_count": 2,
+        "false_negative_count": 0,
+        "false_positive_rate": 0.2857,
+        "false_negative_rate": 0.0,
+        "fp_samples": [
           {
-            "text": "pasangan norakk",
-            "prob": 0.5784,
-            "implicit_level": "E0",
-            "type": "INS"
+            "text": "Congore adalah masalahnya",
+            "prob": 0.5394,
+            "implicit_level": "E0"
+          },
+          {
+            "text": "idungnya.. ????",
+            "prob": 0.6343,
+            "implicit_level": "E0"
           }
-        ]
+        ],
+        "fn_samples": []
       },
       "model_name": "E2. LLM Knowledge-Only Model (33D Contextual Cues)",
       "status": "evaluated_against_llm_pseudo_labels"
     },
     "E3_hybrid_full_fusion": {
-      "threshold": 0.2,
-      "support": 5,
-      "accuracy": 0.8,
-      "macro_precision": 0.4,
-      "macro_recall": 0.5,
-      "macro_f1": 0.4444,
-      "weighted_precision": 0.64,
-      "weighted_recall": 0.8,
-      "weighted_f1": 0.7111,
-      "roc_auc": 0.0,
-      "pr_auc": 0.6792,
+      "threshold": 0.54,
+      "support": 23,
+      "accuracy": 0.5652,
+      "macro_precision": 0.4866,
+      "macro_recall": 0.4866,
+      "macro_f1": 0.4866,
+      "weighted_precision": 0.5652,
+      "weighted_recall": 0.5652,
+      "weighted_f1": 0.5652,
+      "roc_auc": 0.3929,
+      "pr_auc": 0.6389,
       "calibration": {
-        "ece": 0.5124,
-        "mce": 0.7711,
-        "brier_score": 0.2797,
-        "log_loss": 0.7706
+        "ece": 0.1534,
+        "mce": 0.3423,
+        "brier_score": 0.2428,
+        "log_loss": 0.6799
       },
       "confidence_intervals_95": {
         "accuracy": [
-          0.4,
-          1.0
+          0.3913,
+          0.7391
         ],
         "macro_f1": [
-          0.2857,
-          1.0
+          0.303,
+          0.6734
         ],
         "roc_auc": [
-          0.0,
-          0.0
+          0.13,
+          0.6776
         ],
         "pr_auc": [
-          0.325,
-          0.7625
+          0.4649,
+          0.9131
         ]
       },
       "confusion_matrix": {
-        "tn": 0,
-        "fp": 1,
-        "fn": 0,
-        "tp": 4
+        "tn": 2,
+        "fp": 5,
+        "fn": 5,
+        "tp": 11
       },
       "confusion_matrix_2x2": [
         [
-          0,
-          1
+          2,
+          5
         ],
         [
-          0,
-          4
+          5,
+          11
         ]
       ],
       "per_class": {
         "non_cyberbullying": {
-          "precision": 0.0,
-          "recall": 0.0,
-          "f1": 0.0,
-          "support": 1
+          "precision": 0.2857,
+          "recall": 0.2857,
+          "f1": 0.2857,
+          "support": 7
         },
         "cyberbullying": {
-          "precision": 0.8,
-          "recall": 1.0,
-          "f1": 0.8889,
-          "support": 4
+          "precision": 0.6875,
+          "recall": 0.6875,
+          "f1": 0.6875,
+          "support": 16
         }
       },
       "implicitness_breakdown": {
         "E0": {
-          "count": 3,
-          "correct": 2,
-          "accuracy": 0.6667,
-          "macro_f1": 0.4
+          "count": 11,
+          "correct": 5,
+          "accuracy": 0.4545,
+          "macro_f1": 0.45
         },
         "E1": {
-          "count": 2,
-          "correct": 2,
-          "accuracy": 1.0,
-          "macro_f1": 1.0
+          "count": 12,
+          "correct": 8,
+          "accuracy": 0.6667,
+          "macro_f1": 0.4
         }
       },
       "type_breakdown": {
+        "BSH": {
+          "count": 3,
+          "correct": 1,
+          "accuracy": 0.3333
+        },
         "INS": {
+          "count": 6,
+          "correct": 4,
+          "accuracy": 0.6667
+        },
+        "NONE": {
+          "count": 7,
+          "correct": 2,
+          "accuracy": 0.2857
+        },
+        "SAR": {
           "count": 4,
           "correct": 4,
           "accuracy": 1.0
         },
-        "NONE": {
+        "SEX": {
           "count": 1,
-          "correct": 0,
-          "accuracy": 0.0
+          "correct": 1,
+          "accuracy": 1.0
+        },
+        "SHM": {
+          "count": 2,
+          "correct": 1,
+          "accuracy": 0.5
         }
       },
       "error_analysis": {
-        "false_positive_count": 1,
-        "false_negative_count": 0,
-        "false_positive_rate": 1.0,
-        "false_negative_rate": 0.0,
+        "false_positive_count": 5,
+        "false_negative_count": 5,
+        "false_positive_rate": 0.7143,
+        "false_negative_rate": 0.3125,
         "fp_samples": [
           {
-            "text": "Kue Koncol",
-            "prob": 0.7711,
+            "text": "Beli alat gym aja kak",
+            "prob": 0.6491,
+            "implicit_level": "E0"
+          },
+          {
+            "text": "Jealorely",
+            "prob": 0.654,
+            "implicit_level": "E0"
+          },
+          {
+            "text": "manyunan kematian",
+            "prob": 0.5909,
+            "implicit_level": "E0"
+          },
+          {
+            "text": "senyum logo arsenal berkah",
+            "prob": 0.5954,
+            "implicit_level": "E0"
+          },
+          {
+            "text": "idungnya.. ????",
+            "prob": 0.7307,
             "implicit_level": "E0"
           }
         ],
-        "fn_samples": []
+        "fn_samples": [
+          {
+            "text": "malu ga si bang @user Wardani si paling tau jepang ?????????? baru mau kejepang udah bikin malu wkwkwkwkw",
+            "prob": 0.4473,
+            "implicit_level": "E1",
+            "type": "SHM"
+          },
+          {
+            "text": "maju lo semua yang bilang tasyi mirip Buzz, gua kan skrg tiap liat tasyi jadi bayangin Buzz",
+            "prob": 0.4575,
+            "implicit_level": "E1",
+            "type": "INS"
+          },
+          {
+            "text": "mon maap sejak kapan bright bibirny maju",
+            "prob": 0.4746,
+            "implicit_level": "E1",
+            "type": "BSH"
+          },
+          {
+            "text": "kok jadi gitu cokk mata nya",
+            "prob": 0.5374,
+            "implicit_level": "E1",
+            "type": "BSH"
+          },
+          {
+            "text": "dasar miskin",
+            "prob": 0.4365,
+            "implicit_level": "E0",
+            "type": "INS"
+          }
+        ]
       },
       "model_name": "E3. Full Hybrid Transformer-LLM Fusion",
       "fusion_mode": "gated",
       "ablation_mask_mode": "none",
-      "mean_gating_z": 0.4941,
+      "mean_gating_z": 0.4964,
       "multi_task_heads_test": {
         "type": {
-          "support": 5,
-          "accuracy": 0.2,
-          "macro_f1": 0.1667
+          "support": 23,
+          "accuracy": 0.3478,
+          "macro_f1": 0.1436
         },
         "emotion": {
-          "support": 5,
-          "accuracy": 0.4,
-          "macro_f1": 0.1905
+          "support": 23,
+          "accuracy": 0.6522,
+          "macro_f1": 0.3299
         },
         "cultural": {
-          "support": 5,
-          "accuracy": 0.2,
-          "macro_f1": 0.1111
+          "support": 23,
+          "accuracy": 0.3913,
+          "macro_f1": 0.1406
         },
         "implicit": {
-          "support": 5,
-          "accuracy": 0.4,
-          "macro_f1": 0.2667
+          "support": 23,
+          "accuracy": 0.6957,
+          "macro_f1": 0.6957
         },
         "severity": {
-          "support": 5,
-          "accuracy": 0.2,
-          "macro_f1": 0.1667
+          "support": 23,
+          "accuracy": 0.5217,
+          "macro_f1": 0.2724
         }
       }
     },
     "E4_hybrid_no_cultural": {
-      "threshold": 0.2,
-      "support": 5,
-      "accuracy": 0.8,
-      "macro_precision": 0.4,
-      "macro_recall": 0.5,
-      "macro_f1": 0.4444,
-      "weighted_precision": 0.64,
-      "weighted_recall": 0.8,
-      "weighted_f1": 0.7111,
-      "roc_auc": 0.0,
-      "pr_auc": 0.6792,
+      "threshold": 0.58,
+      "support": 23,
+      "accuracy": 0.5217,
+      "macro_precision": 0.4962,
+      "macro_recall": 0.4955,
+      "macro_f1": 0.4868,
+      "weighted_precision": 0.5729,
+      "weighted_recall": 0.5217,
+      "weighted_f1": 0.5392,
+      "roc_auc": 0.4643,
+      "pr_auc": 0.6782,
       "calibration": {
-        "ece": 0.4755,
-        "mce": 0.7743,
-        "brier_score": 0.2499,
-        "log_loss": 0.7095
+        "ece": 0.1223,
+        "mce": 0.2894,
+        "brier_score": 0.2338,
+        "log_loss": 0.6608
       },
       "confidence_intervals_95": {
         "accuracy": [
-          0.4,
-          1.0
+          0.3043,
+          0.7391
         ],
         "macro_f1": [
-          0.2857,
-          1.0
+          0.2812,
+          0.692
         ],
         "roc_auc": [
-          0.0,
-          0.0
+          0.1962,
+          0.7458
         ],
         "pr_auc": [
-          0.325,
-          0.7625
+          0.4912,
+          0.9436
         ]
       },
       "confusion_matrix": {
-        "tn": 0,
-        "fp": 1,
-        "fn": 0,
-        "tp": 4
+        "tn": 3,
+        "fp": 4,
+        "fn": 7,
+        "tp": 9
       },
       "confusion_matrix_2x2": [
         [
-          0,
-          1
+          3,
+          4
         ],
         [
-          0,
-          4
+          7,
+          9
         ]
       ],
       "per_class": {
         "non_cyberbullying": {
-          "precision": 0.0,
-          "recall": 0.0,
-          "f1": 0.0,
-          "support": 1
+          "precision": 0.3,
+          "recall": 0.4286,
+          "f1": 0.3529,
+          "support": 7
         },
         "cyberbullying": {
-          "precision": 0.8,
-          "recall": 1.0,
-          "f1": 0.8889,
-          "support": 4
+          "precision": 0.6923,
+          "recall": 0.5625,
+          "f1": 0.6207,
+          "support": 16
         }
       },
       "implicitness_breakdown": {
         "E0": {
-          "count": 3,
-          "correct": 2,
-          "accuracy": 0.6667,
-          "macro_f1": 0.4
+          "count": 11,
+          "correct": 6,
+          "accuracy": 0.5455,
+          "macro_f1": 0.5455
         },
         "E1": {
-          "count": 2,
-          "correct": 2,
-          "accuracy": 1.0,
-          "macro_f1": 1.0
+          "count": 12,
+          "correct": 6,
+          "accuracy": 0.5,
+          "macro_f1": 0.3333
         }
       },
       "type_breakdown": {
+        "BSH": {
+          "count": 3,
+          "correct": 1,
+          "accuracy": 0.3333
+        },
         "INS": {
+          "count": 6,
+          "correct": 3,
+          "accuracy": 0.5
+        },
+        "NONE": {
+          "count": 7,
+          "correct": 3,
+          "accuracy": 0.4286
+        },
+        "SAR": {
           "count": 4,
           "correct": 4,
           "accuracy": 1.0
         },
-        "NONE": {
+        "SEX": {
           "count": 1,
+          "correct": 1,
+          "accuracy": 1.0
+        },
+        "SHM": {
+          "count": 2,
           "correct": 0,
           "accuracy": 0.0
         }
       },
       "error_analysis": {
-        "false_positive_count": 1,
-        "false_negative_count": 0,
-        "false_positive_rate": 1.0,
-        "false_negative_rate": 0.0,
+        "false_positive_count": 4,
+        "false_negative_count": 7,
+        "false_positive_rate": 0.5714,
+        "false_negative_rate": 0.4375,
         "fp_samples": [
           {
-            "text": "Kue Koncol",
-            "prob": 0.7743,
+            "text": "Beli alat gym aja kak",
+            "prob": 0.6417,
+            "implicit_level": "E0"
+          },
+          {
+            "text": "Jealorely",
+            "prob": 0.6492,
+            "implicit_level": "E0"
+          },
+          {
+            "text": "senyum logo arsenal berkah",
+            "prob": 0.5886,
+            "implicit_level": "E0"
+          },
+          {
+            "text": "idungnya.. ????",
+            "prob": 0.731,
             "implicit_level": "E0"
           }
         ],
-        "fn_samples": []
+        "fn_samples": [
+          {
+            "text": "senyuma lu mirip logo Arsenal",
+            "prob": 0.5713,
+            "implicit_level": "E1",
+            "type": "INS"
+          },
+          {
+            "text": "malu ga si bang @user Wardani si paling tau jepang ?????????? baru mau kejepang udah bikin malu wkwkwkwkw",
+            "prob": 0.451,
+            "implicit_level": "E1",
+            "type": "SHM"
+          },
+          {
+            "text": "maju lo semua yang bilang tasyi mirip Buzz, gua kan skrg tiap liat tasyi jadi bayangin Buzz",
+            "prob": 0.4576,
+            "implicit_level": "E1",
+            "type": "INS"
+          },
+          {
+            "text": "mon maap sejak kapan bright bibirny maju",
+            "prob": 0.4697,
+            "implicit_level": "E1",
+            "type": "BSH"
+          },
+          {
+            "text": "kok jadi gitu cokk mata nya",
+            "prob": 0.5315,
+            "implicit_level": "E1",
+            "type": "BSH"
+          }
+        ]
       },
       "model_name": "E4. Hybrid without Cultural Knowledge",
       "fusion_mode": "gated",
       "ablation_mask_mode": "no_cultural",
-      "mean_gating_z": 0.4943,
+      "mean_gating_z": 0.4966,
       "multi_task_heads_test": {
         "type": {
-          "support": 5,
-          "accuracy": 0.2,
-          "macro_f1": 0.1333
+          "support": 23,
+          "accuracy": 0.3478,
+          "macro_f1": 0.1436
         },
         "emotion": {
-          "support": 5,
-          "accuracy": 0.4,
-          "macro_f1": 0.1429
+          "support": 23,
+          "accuracy": 0.6522,
+          "macro_f1": 0.3299
         },
         "cultural": {
-          "support": 5,
-          "accuracy": 0.0,
-          "macro_f1": 0.0
+          "support": 23,
+          "accuracy": 0.3478,
+          "macro_f1": 0.129
         },
         "implicit": {
-          "support": 5,
-          "accuracy": 0.4,
-          "macro_f1": 0.2222
+          "support": 23,
+          "accuracy": 0.6522,
+          "macro_f1": 0.6515
         },
         "severity": {
-          "support": 5,
-          "accuracy": 0.2,
-          "macro_f1": 0.1667
+          "support": 23,
+          "accuracy": 0.5217,
+          "macro_f1": 0.2724
         }
       }
     },
     "E5_hybrid_no_emotional": {
-      "threshold": 0.2,
-      "support": 5,
-      "accuracy": 0.8,
-      "macro_precision": 0.4,
-      "macro_recall": 0.5,
-      "macro_f1": 0.4444,
-      "weighted_precision": 0.64,
-      "weighted_recall": 0.8,
-      "weighted_f1": 0.7111,
-      "roc_auc": 0.0,
-      "pr_auc": 0.6792,
+      "threshold": 0.5,
+      "support": 23,
+      "accuracy": 0.6087,
+      "macro_precision": 0.4671,
+      "macro_recall": 0.4777,
+      "macro_f1": 0.4623,
+      "weighted_precision": 0.5521,
+      "weighted_recall": 0.6087,
+      "weighted_f1": 0.5721,
+      "roc_auc": 0.4018,
+      "pr_auc": 0.6412,
       "calibration": {
-        "ece": 0.3372,
-        "mce": 0.4566,
-        "brier_score": 0.2526,
-        "log_loss": 0.7035
+        "ece": 0.1791,
+        "mce": 0.7043,
+        "brier_score": 0.2378,
+        "log_loss": 0.6693
       },
       "confidence_intervals_95": {
         "accuracy": [
-          0.4,
-          1.0
+          0.4348,
+          0.7826
         ],
         "macro_f1": [
-          0.2857,
-          1.0
+          0.303,
+          0.6618
         ],
         "roc_auc": [
-          0.0,
-          0.0
+          0.1111,
+          0.6927
         ],
         "pr_auc": [
-          0.325,
-          0.7625
+          0.4658,
+          0.9221
         ]
       },
       "confusion_matrix": {
-        "tn": 0,
-        "fp": 1,
-        "fn": 0,
-        "tp": 4
+        "tn": 1,
+        "fp": 6,
+        "fn": 3,
+        "tp": 13
       },
       "confusion_matrix_2x2": [
         [
-          0,
-          1
+          1,
+          6
         ],
         [
-          0,
-          4
+          3,
+          13
         ]
       ],
       "per_class": {
         "non_cyberbullying": {
-          "precision": 0.0,
-          "recall": 0.0,
-          "f1": 0.0,
-          "support": 1
+          "precision": 0.25,
+          "recall": 0.1429,
+          "f1": 0.1818,
+          "support": 7
         },
         "cyberbullying": {
-          "precision": 0.8,
-          "recall": 1.0,
-          "f1": 0.8889,
-          "support": 4
+          "precision": 0.6842,
+          "recall": 0.8125,
+          "f1": 0.7429,
+          "support": 16
         }
       },
       "implicitness_breakdown": {
         "E0": {
-          "count": 3,
-          "correct": 2,
-          "accuracy": 0.6667,
-          "macro_f1": 0.4
+          "count": 11,
+          "correct": 4,
+          "accuracy": 0.3636,
+          "macro_f1": 0.3419
         },
         "E1": {
-          "count": 2,
-          "correct": 2,
-          "accuracy": 1.0,
-          "macro_f1": 1.0
+          "count": 12,
+          "correct": 10,
+          "accuracy": 0.8333,
+          "macro_f1": 0.4545
         }
       },
       "type_breakdown": {
+        "BSH": {
+          "count": 3,
+          "correct": 2,
+          "accuracy": 0.6667
+        },
         "INS": {
+          "count": 6,
+          "correct": 4,
+          "accuracy": 0.6667
+        },
+        "NONE": {
+          "count": 7,
+          "correct": 1,
+          "accuracy": 0.1429
+        },
+        "SAR": {
           "count": 4,
           "correct": 4,
           "accuracy": 1.0
         },
-        "NONE": {
+        "SEX": {
           "count": 1,
-          "correct": 0,
-          "accuracy": 0.0
+          "correct": 1,
+          "accuracy": 1.0
+        },
+        "SHM": {
+          "count": 2,
+          "correct": 2,
+          "accuracy": 1.0
         }
       },
       "error_analysis": {
-        "false_positive_count": 1,
-        "false_negative_count": 0,
-        "false_positive_rate": 1.0,
-        "false_negative_rate": 0.0,
+        "false_positive_count": 6,
+        "false_negative_count": 3,
+        "false_positive_rate": 0.8571,
+        "false_negative_rate": 0.1875,
         "fp_samples": [
           {
-            "text": "Kue Koncol",
-            "prob": 0.6992,
+            "text": "Beli alat gym aja kak",
+            "prob": 0.6415,
+            "implicit_level": "E0"
+          },
+          {
+            "text": "Jealorely",
+            "prob": 0.6536,
+            "implicit_level": "E0"
+          },
+          {
+            "text": "Jangan lupa mandi",
+            "prob": 0.5124,
+            "implicit_level": "E0"
+          },
+          {
+            "text": "manyunan kematian",
+            "prob": 0.5642,
+            "implicit_level": "E0"
+          },
+          {
+            "text": "senyum logo arsenal berkah",
+            "prob": 0.5813,
             "implicit_level": "E0"
           }
         ],
-        "fn_samples": []
+        "fn_samples": [
+          {
+            "text": "maju lo semua yang bilang tasyi mirip Buzz, gua kan skrg tiap liat tasyi jadi bayangin Buzz",
+            "prob": 0.4453,
+            "implicit_level": "E1",
+            "type": "INS"
+          },
+          {
+            "text": "mon maap sejak kapan bright bibirny maju",
+            "prob": 0.4631,
+            "implicit_level": "E1",
+            "type": "BSH"
+          },
+          {
+            "text": "dasar miskin",
+            "prob": 0.4622,
+            "implicit_level": "E0",
+            "type": "INS"
+          }
+        ]
       },
       "model_name": "E5. Hybrid without Emotional Knowledge",
       "fusion_mode": "gated",
       "ablation_mask_mode": "no_emotional",
-      "mean_gating_z": 0.4937,
+      "mean_gating_z": 0.4988,
       "multi_task_heads_test": {
         "type": {
-          "support": 5,
-          "accuracy": 0.2,
-          "macro_f1": 0.1667
+          "support": 23,
+          "accuracy": 0.3478,
+          "macro_f1": 0.1436
         },
         "emotion": {
-          "support": 5,
-          "accuracy": 0.4,
-          "macro_f1": 0.1905
+          "support": 23,
+          "accuracy": 0.6522,
+          "macro_f1": 0.3299
         },
         "cultural": {
-          "support": 5,
-          "accuracy": 0.2,
-          "macro_f1": 0.1333
+          "support": 23,
+          "accuracy": 0.4348,
+          "macro_f1": 0.2418
         },
         "implicit": {
-          "support": 5,
-          "accuracy": 0.0,
-          "macro_f1": 0.0
+          "support": 23,
+          "accuracy": 0.6087,
+          "macro_f1": 0.5965
         },
         "severity": {
-          "support": 5,
-          "accuracy": 0.4,
-          "macro_f1": 0.3
+          "support": 23,
+          "accuracy": 0.5652,
+          "macro_f1": 0.3167
         }
       }
     },
     "E6_hybrid_no_gated_fusion": {
-      "threshold": 0.2,
-      "support": 5,
-      "accuracy": 0.8,
-      "macro_precision": 0.4,
-      "macro_recall": 0.5,
-      "macro_f1": 0.4444,
-      "weighted_precision": 0.64,
-      "weighted_recall": 0.8,
-      "weighted_f1": 0.7111,
-      "roc_auc": 1.0,
-      "pr_auc": 1.0,
+      "threshold": 0.7,
+      "support": 23,
+      "accuracy": 0.5217,
+      "macro_precision": 0.6161,
+      "macro_recall": 0.6161,
+      "macro_f1": 0.5217,
+      "weighted_precision": 0.7104,
+      "weighted_recall": 0.5217,
+      "weighted_f1": 0.5217,
+      "roc_auc": 0.6071,
+      "pr_auc": 0.8313,
       "calibration": {
-        "ece": 0.3078,
-        "mce": 0.5857,
-        "brier_score": 0.121,
-        "log_loss": 0.4001
+        "ece": 0.0919,
+        "mce": 0.1196,
+        "brier_score": 0.2053,
+        "log_loss": 0.5982
       },
       "confidence_intervals_95": {
         "accuracy": [
-          0.4,
-          1.0
+          0.3043,
+          0.7391
         ],
         "macro_f1": [
-          0.2857,
-          1.0
+          0.303,
+          0.7346
         ],
         "roc_auc": [
-          1.0,
-          1.0
+          0.3793,
+          0.8426
         ],
         "pr_auc": [
-          1.0,
-          1.0
+          0.6638,
+          0.9578
         ]
       },
       "confusion_matrix": {
-        "tn": 0,
+        "tn": 6,
         "fp": 1,
-        "fn": 0,
-        "tp": 4
+        "fn": 10,
+        "tp": 6
       },
       "confusion_matrix_2x2": [
         [
-          0,
+          6,
           1
         ],
         [
-          0,
-          4
+          10,
+          6
         ]
       ],
       "per_class": {
         "non_cyberbullying": {
-          "precision": 0.0,
-          "recall": 0.0,
-          "f1": 0.0,
-          "support": 1
+          "precision": 0.375,
+          "recall": 0.8571,
+          "f1": 0.5217,
+          "support": 7
         },
         "cyberbullying": {
-          "precision": 0.8,
-          "recall": 1.0,
-          "f1": 0.8889,
-          "support": 4
+          "precision": 0.8571,
+          "recall": 0.375,
+          "f1": 0.5217,
+          "support": 16
         }
       },
       "implicitness_breakdown": {
         "E0": {
-          "count": 3,
-          "correct": 2,
-          "accuracy": 0.6667,
-          "macro_f1": 0.4
+          "count": 11,
+          "correct": 7,
+          "accuracy": 0.6364,
+          "macro_f1": 0.5417
         },
         "E1": {
-          "count": 2,
-          "correct": 2,
-          "accuracy": 1.0,
-          "macro_f1": 1.0
+          "count": 12,
+          "correct": 5,
+          "accuracy": 0.4167,
+          "macro_f1": 0.2941
         }
       },
       "type_breakdown": {
-        "INS": {
-          "count": 4,
-          "correct": 4,
+        "BSH": {
+          "count": 3,
+          "correct": 3,
           "accuracy": 1.0
         },
+        "INS": {
+          "count": 6,
+          "correct": 2,
+          "accuracy": 0.3333
+        },
         "NONE": {
+          "count": 7,
+          "correct": 6,
+          "accuracy": 0.8571
+        },
+        "SAR": {
+          "count": 4,
+          "correct": 1,
+          "accuracy": 0.25
+        },
+        "SEX": {
           "count": 1,
+          "correct": 0,
+          "accuracy": 0.0
+        },
+        "SHM": {
+          "count": 2,
           "correct": 0,
           "accuracy": 0.0
         }
       },
       "error_analysis": {
         "false_positive_count": 1,
-        "false_negative_count": 0,
-        "false_positive_rate": 1.0,
-        "false_negative_rate": 0.0,
+        "false_negative_count": 10,
+        "false_positive_rate": 0.1429,
+        "false_negative_rate": 0.625,
         "fp_samples": [
           {
-            "text": "Kue Koncol",
-            "prob": 0.5857,
+            "text": "senyum logo arsenal berkah",
+            "prob": 0.7083,
             "implicit_level": "E0"
           }
         ],
-        "fn_samples": []
+        "fn_samples": [
+          {
+            "text": "senyum logo arsenal wk",
+            "prob": 0.5884,
+            "implicit_level": "E1",
+            "type": "SAR"
+          },
+          {
+            "text": "malu ga si bang @user Wardani si paling tau jepang ?????????? baru mau kejepang udah bikin malu wkwkwkwkw",
+            "prob": 0.5326,
+            "implicit_level": "E1",
+            "type": "SHM"
+          },
+          {
+            "text": "Selebgram kere??",
+            "prob": 0.6404,
+            "implicit_level": "E0",
+            "type": "INS"
+          },
+          {
+            "text": "maju lo semua yang bilang tasyi mirip Buzz, gua kan skrg tiap liat tasyi jadi bayangin Buzz",
+            "prob": 0.6257,
+            "implicit_level": "E1",
+            "type": "INS"
+          },
+          {
+            "text": "Wajah kue kontol Anda",
+            "prob": 0.6892,
+            "implicit_level": "E0",
+            "type": "SEX"
+          }
+        ]
       },
       "model_name": "E6. Hybrid without Gated Fusion (Concat)",
       "fusion_mode": "concat",
@@ -953,523 +1342,714 @@
       "mean_gating_z": 0.5,
       "multi_task_heads_test": {
         "type": {
-          "support": 5,
-          "accuracy": 0.4,
-          "macro_f1": 0.2222
+          "support": 23,
+          "accuracy": 0.4348,
+          "macro_f1": 0.1944
         },
         "emotion": {
-          "support": 5,
-          "accuracy": 0.8,
-          "macro_f1": 0.4444
+          "support": 23,
+          "accuracy": 0.6957,
+          "macro_f1": 0.3667
         },
         "cultural": {
-          "support": 5,
-          "accuracy": 0.4,
-          "macro_f1": 0.3
+          "support": 23,
+          "accuracy": 0.5217,
+          "macro_f1": 0.2915
         },
         "implicit": {
-          "support": 5,
-          "accuracy": 0.2,
-          "macro_f1": 0.1667
+          "support": 23,
+          "accuracy": 0.6522,
+          "macro_f1": 0.6349
         },
         "severity": {
-          "support": 5,
-          "accuracy": 0.8,
-          "macro_f1": 0.4444
+          "support": 23,
+          "accuracy": 0.4783,
+          "macro_f1": 0.2997
         }
       }
     },
     "indobertweet_standalone_checkpoint": {
-      "threshold": 0.2,
-      "support": 5,
-      "accuracy": 0.8,
-      "macro_precision": 0.4,
-      "macro_recall": 0.5,
-      "macro_f1": 0.4444,
-      "weighted_precision": 0.64,
-      "weighted_recall": 0.8,
-      "weighted_f1": 0.7111,
-      "roc_auc": 0.25,
-      "pr_auc": 0.8042,
+      "threshold": 0.62,
+      "support": 23,
+      "accuracy": 0.7391,
+      "macro_precision": 0.692,
+      "macro_recall": 0.692,
+      "macro_f1": 0.692,
+      "weighted_precision": 0.7391,
+      "weighted_recall": 0.7391,
+      "weighted_f1": 0.7391,
+      "roc_auc": 0.8036,
+      "pr_auc": 0.901,
       "calibration": {
-        "ece": 0.2871,
-        "mce": 0.4288,
-        "brier_score": 0.2098,
-        "log_loss": 0.6113
+        "ece": 0.1299,
+        "mce": 0.4659,
+        "brier_score": 0.18,
+        "log_loss": 0.5447
       },
       "confidence_intervals_95": {
         "accuracy": [
-          0.4,
-          1.0
+          0.5217,
+          0.913
         ],
         "macro_f1": [
-          0.2857,
-          1.0
+          0.4623,
+          0.8973
         ],
         "roc_auc": [
-          0.0,
-          0.75
-        ],
-        "pr_auc": [
-          0.4,
-          0.95
-        ]
-      },
-      "confusion_matrix": {
-        "tn": 0,
-        "fp": 1,
-        "fn": 0,
-        "tp": 4
-      },
-      "confusion_matrix_2x2": [
-        [
-          0,
-          1
-        ],
-        [
-          0,
-          4
-        ]
-      ],
-      "per_class": {
-        "non_cyberbullying": {
-          "precision": 0.0,
-          "recall": 0.0,
-          "f1": 0.0,
-          "support": 1
-        },
-        "cyberbullying": {
-          "precision": 0.8,
-          "recall": 1.0,
-          "f1": 0.8889,
-          "support": 4
-        }
-      },
-      "implicitness_breakdown": {
-        "E0": {
-          "count": 3,
-          "correct": 2,
-          "accuracy": 0.6667,
-          "macro_f1": 0.4
-        },
-        "E1": {
-          "count": 2,
-          "correct": 2,
-          "accuracy": 1.0,
-          "macro_f1": 1.0
-        }
-      },
-      "type_breakdown": {
-        "INS": {
-          "count": 4,
-          "correct": 4,
-          "accuracy": 1.0
-        },
-        "NONE": {
-          "count": 1,
-          "correct": 0,
-          "accuracy": 0.0
-        }
-      },
-      "error_analysis": {
-        "false_positive_count": 1,
-        "false_negative_count": 0,
-        "false_positive_rate": 1.0,
-        "false_negative_rate": 0.0,
-        "fp_samples": [
-          {
-            "text": "Kue Koncol",
-            "prob": 0.6829,
-            "implicit_level": "E0"
-          }
-        ],
-        "fn_samples": []
-      },
-      "model_name": "A. IndoBERTweet-Only (Stream A)"
-    },
-    "model_a_indobertweet_only": {
-      "threshold": 0.2,
-      "support": 5,
-      "accuracy": 0.8,
-      "macro_precision": 0.4,
-      "macro_recall": 0.5,
-      "macro_f1": 0.4444,
-      "weighted_precision": 0.64,
-      "weighted_recall": 0.8,
-      "weighted_f1": 0.7111,
-      "roc_auc": 0.0,
-      "pr_auc": 0.6792,
-      "calibration": {
-        "ece": 0.3964,
-        "mce": 0.8114,
-        "brier_score": 0.2008,
-        "log_loss": 0.6112
-      },
-      "confidence_intervals_95": {
-        "accuracy": [
-          0.4,
-          1.0
-        ],
-        "macro_f1": [
-          0.2857,
-          1.0
-        ],
-        "roc_auc": [
-          0.0,
-          0.0
-        ],
-        "pr_auc": [
-          0.325,
-          0.7625
-        ]
-      },
-      "confusion_matrix": {
-        "tn": 0,
-        "fp": 1,
-        "fn": 0,
-        "tp": 4
-      },
-      "confusion_matrix_2x2": [
-        [
-          0,
-          1
-        ],
-        [
-          0,
-          4
-        ]
-      ],
-      "per_class": {
-        "non_cyberbullying": {
-          "precision": 0.0,
-          "recall": 0.0,
-          "f1": 0.0,
-          "support": 1
-        },
-        "cyberbullying": {
-          "precision": 0.8,
-          "recall": 1.0,
-          "f1": 0.8889,
-          "support": 4
-        }
-      },
-      "implicitness_breakdown": {
-        "E0": {
-          "count": 3,
-          "correct": 2,
-          "accuracy": 0.6667,
-          "macro_f1": 0.4
-        },
-        "E1": {
-          "count": 2,
-          "correct": 2,
-          "accuracy": 1.0,
-          "macro_f1": 1.0
-        }
-      },
-      "type_breakdown": {
-        "INS": {
-          "count": 4,
-          "correct": 4,
-          "accuracy": 1.0
-        },
-        "NONE": {
-          "count": 1,
-          "correct": 0,
-          "accuracy": 0.0
-        }
-      },
-      "error_analysis": {
-        "false_positive_count": 1,
-        "false_negative_count": 0,
-        "false_positive_rate": 1.0,
-        "false_negative_rate": 0.0,
-        "fp_samples": [
-          {
-            "text": "Kue Koncol",
-            "prob": 0.8114,
-            "implicit_level": "E0"
-          }
-        ],
-        "fn_samples": []
-      },
-      "model_name": "E1. Transformer-Only Baseline (Stream A)",
-      "fusion_mode": "gated",
-      "ablation_mask_mode": "all_zero",
-      "mean_gating_z": 0.497,
-      "multi_task_heads_test": {
-        "type": {
-          "support": 5,
-          "accuracy": 0.2,
-          "macro_f1": 0.1333
-        },
-        "emotion": {
-          "support": 5,
-          "accuracy": 0.6,
-          "macro_f1": 0.25
-        },
-        "cultural": {
-          "support": 5,
-          "accuracy": 0.2,
-          "macro_f1": 0.1
-        },
-        "implicit": {
-          "support": 5,
-          "accuracy": 0.4,
-          "macro_f1": 0.3
-        },
-        "severity": {
-          "support": 5,
-          "accuracy": 0.2,
-          "macro_f1": 0.1333
-        }
-      }
-    },
-    "model_b_llm_only": {
-      "threshold": 0.58,
-      "support": 5,
-      "accuracy": 0.8,
-      "macro_precision": 0.75,
-      "macro_recall": 0.875,
-      "macro_f1": 0.7619,
-      "weighted_precision": 0.9,
-      "weighted_recall": 0.8,
-      "weighted_f1": 0.819,
-      "roc_auc": 1.0,
-      "pr_auc": 1.0,
-      "calibration": {
-        "ece": 0.1892,
-        "mce": 0.3281,
-        "brier_score": 0.1451,
-        "log_loss": 0.4662
-      },
-      "confidence_intervals_95": {
-        "accuracy": [
-          0.4,
-          1.0
-        ],
-        "macro_f1": [
-          0.2857,
-          1.0
-        ],
-        "roc_auc": [
-          1.0,
+          0.5579,
           1.0
         ],
         "pr_auc": [
-          1.0,
+          0.7631,
           1.0
         ]
       },
       "confusion_matrix": {
-        "tn": 1,
-        "fp": 0,
-        "fn": 1,
-        "tp": 3
+        "tn": 4,
+        "fp": 3,
+        "fn": 3,
+        "tp": 13
       },
       "confusion_matrix_2x2": [
         [
-          1,
-          0
-        ],
-        [
-          1,
+          4,
           3
+        ],
+        [
+          3,
+          13
         ]
       ],
       "per_class": {
         "non_cyberbullying": {
-          "precision": 0.5,
-          "recall": 1.0,
-          "f1": 0.6667,
-          "support": 1
+          "precision": 0.5714,
+          "recall": 0.5714,
+          "f1": 0.5714,
+          "support": 7
         },
         "cyberbullying": {
-          "precision": 1.0,
-          "recall": 0.75,
-          "f1": 0.8571,
-          "support": 4
+          "precision": 0.8125,
+          "recall": 0.8125,
+          "f1": 0.8125,
+          "support": 16
         }
       },
       "implicitness_breakdown": {
         "E0": {
-          "count": 3,
-          "correct": 2,
-          "accuracy": 0.6667,
-          "macro_f1": 0.6667
+          "count": 11,
+          "correct": 6,
+          "accuracy": 0.5455,
+          "macro_f1": 0.5299
         },
         "E1": {
-          "count": 2,
-          "correct": 2,
-          "accuracy": 1.0,
-          "macro_f1": 1.0
+          "count": 12,
+          "correct": 11,
+          "accuracy": 0.9167,
+          "macro_f1": 0.4783
         }
       },
       "type_breakdown": {
+        "BSH": {
+          "count": 3,
+          "correct": 3,
+          "accuracy": 1.0
+        },
         "INS": {
+          "count": 6,
+          "correct": 5,
+          "accuracy": 0.8333
+        },
+        "NONE": {
+          "count": 7,
+          "correct": 4,
+          "accuracy": 0.5714
+        },
+        "SAR": {
           "count": 4,
           "correct": 3,
           "accuracy": 0.75
         },
-        "NONE": {
+        "SEX": {
           "count": 1,
-          "correct": 1,
+          "correct": 0,
+          "accuracy": 0.0
+        },
+        "SHM": {
+          "count": 2,
+          "correct": 2,
           "accuracy": 1.0
         }
       },
       "error_analysis": {
-        "false_positive_count": 0,
-        "false_negative_count": 1,
-        "false_positive_rate": 0.0,
-        "false_negative_rate": 0.25,
-        "fp_samples": [],
+        "false_positive_count": 3,
+        "false_negative_count": 3,
+        "false_positive_rate": 0.4286,
+        "false_negative_rate": 0.1875,
+        "fp_samples": [
+          {
+            "text": "Beli alat gym aja kak",
+            "prob": 0.6587,
+            "implicit_level": "E0"
+          },
+          {
+            "text": "senyum logo arsenal berkah",
+            "prob": 0.6509,
+            "implicit_level": "E0"
+          },
+          {
+            "text": "idungnya.. ????",
+            "prob": 0.7354,
+            "implicit_level": "E0"
+          }
+        ],
         "fn_samples": [
           {
-            "text": "pasangan norakk",
-            "prob": 0.5784,
+            "text": "Selebgram kere??",
+            "prob": 0.619,
             "implicit_level": "E0",
             "type": "INS"
+          },
+          {
+            "text": "Wajah kue kontol Anda",
+            "prob": 0.5767,
+            "implicit_level": "E0",
+            "type": "SEX"
+          },
+          {
+            "text": "masnya butuh pengakuan kalo dia kaya ??",
+            "prob": 0.6112,
+            "implicit_level": "E1",
+            "type": "SAR"
           }
         ]
+      },
+      "model_name": "A. IndoBERTweet-Only (Stream A)"
+    },
+    "model_a_indobertweet_only": {
+      "threshold": 0.5,
+      "support": 23,
+      "accuracy": 0.6522,
+      "macro_precision": 0.3409,
+      "macro_recall": 0.4688,
+      "macro_f1": 0.3947,
+      "weighted_precision": 0.4743,
+      "weighted_recall": 0.6522,
+      "weighted_f1": 0.5492,
+      "roc_auc": 0.5089,
+      "pr_auc": 0.7191,
+      "calibration": {
+        "ece": 0.083,
+        "mce": 0.5062,
+        "brier_score": 0.2233,
+        "log_loss": 0.6393
+      },
+      "confidence_intervals_95": {
+        "accuracy": [
+          0.4554,
+          0.8261
+        ],
+        "macro_f1": [
+          0.3128,
+          0.4524
+        ],
+        "roc_auc": [
+          0.2275,
+          0.8055
+        ],
+        "pr_auc": [
+          0.5206,
+          0.9515
+        ]
+      },
+      "confusion_matrix": {
+        "tn": 0,
+        "fp": 7,
+        "fn": 1,
+        "tp": 15
+      },
+      "confusion_matrix_2x2": [
+        [
+          0,
+          7
+        ],
+        [
+          1,
+          15
+        ]
+      ],
+      "per_class": {
+        "non_cyberbullying": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 7
+        },
+        "cyberbullying": {
+          "precision": 0.6818,
+          "recall": 0.9375,
+          "f1": 0.7895,
+          "support": 16
+        }
+      },
+      "implicitness_breakdown": {
+        "E0": {
+          "count": 11,
+          "correct": 4,
+          "accuracy": 0.3636,
+          "macro_f1": 0.2667
+        },
+        "E1": {
+          "count": 12,
+          "correct": 11,
+          "accuracy": 0.9167,
+          "macro_f1": 0.4783
+        }
+      },
+      "type_breakdown": {
+        "BSH": {
+          "count": 3,
+          "correct": 2,
+          "accuracy": 0.6667
+        },
+        "INS": {
+          "count": 6,
+          "correct": 6,
+          "accuracy": 1.0
+        },
+        "NONE": {
+          "count": 7,
+          "correct": 0,
+          "accuracy": 0.0
+        },
+        "SAR": {
+          "count": 4,
+          "correct": 4,
+          "accuracy": 1.0
+        },
+        "SEX": {
+          "count": 1,
+          "correct": 1,
+          "accuracy": 1.0
+        },
+        "SHM": {
+          "count": 2,
+          "correct": 2,
+          "accuracy": 1.0
+        }
+      },
+      "error_analysis": {
+        "false_positive_count": 7,
+        "false_negative_count": 1,
+        "false_positive_rate": 1.0,
+        "false_negative_rate": 0.0625,
+        "fp_samples": [
+          {
+            "text": "Beli alat gym aja kak",
+            "prob": 0.619,
+            "implicit_level": "E0"
+          },
+          {
+            "text": "Jealorely",
+            "prob": 0.6984,
+            "implicit_level": "E0"
+          },
+          {
+            "text": "Congore adalah masalahnya",
+            "prob": 0.5175,
+            "implicit_level": "E0"
+          },
+          {
+            "text": "Jangan lupa mandi",
+            "prob": 0.5785,
+            "implicit_level": "E0"
+          },
+          {
+            "text": "manyunan kematian",
+            "prob": 0.5865,
+            "implicit_level": "E0"
+          }
+        ],
+        "fn_samples": [
+          {
+            "text": "mon maap sejak kapan bright bibirny maju",
+            "prob": 0.4938,
+            "implicit_level": "E1",
+            "type": "BSH"
+          }
+        ]
+      },
+      "model_name": "E1. Transformer-Only Baseline (Stream A)",
+      "fusion_mode": "gated",
+      "ablation_mask_mode": "all_zero",
+      "mean_gating_z": 0.4902,
+      "multi_task_heads_test": {
+        "type": {
+          "support": 23,
+          "accuracy": 0.3043,
+          "macro_f1": 0.1273
+        },
+        "emotion": {
+          "support": 23,
+          "accuracy": 0.6087,
+          "macro_f1": 0.3083
+        },
+        "cultural": {
+          "support": 23,
+          "accuracy": 0.3913,
+          "macro_f1": 0.1406
+        },
+        "implicit": {
+          "support": 23,
+          "accuracy": 0.7391,
+          "macro_f1": 0.7386
+        },
+        "severity": {
+          "support": 23,
+          "accuracy": 0.5652,
+          "macro_f1": 0.3167
+        }
+      }
+    },
+    "model_b_llm_only": {
+      "threshold": 0.5,
+      "support": 23,
+      "accuracy": 0.913,
+      "macro_precision": 0.9444,
+      "macro_recall": 0.8571,
+      "macro_f1": 0.8873,
+      "weighted_precision": 0.9227,
+      "weighted_recall": 0.913,
+      "weighted_f1": 0.9084,
+      "roc_auc": 0.9777,
+      "pr_auc": 0.9891,
+      "calibration": {
+        "ece": 0.1626,
+        "mce": 0.322,
+        "brier_score": 0.092,
+        "log_loss": 0.3313
+      },
+      "confidence_intervals_95": {
+        "accuracy": [
+          0.7826,
+          1.0
+        ],
+        "macro_f1": [
+          0.6945,
+          1.0
+        ],
+        "roc_auc": [
+          0.9111,
+          1.0
+        ],
+        "pr_auc": [
+          0.9624,
+          1.0
+        ]
+      },
+      "confusion_matrix": {
+        "tn": 5,
+        "fp": 2,
+        "fn": 0,
+        "tp": 16
+      },
+      "confusion_matrix_2x2": [
+        [
+          5,
+          2
+        ],
+        [
+          0,
+          16
+        ]
+      ],
+      "per_class": {
+        "non_cyberbullying": {
+          "precision": 1.0,
+          "recall": 0.7143,
+          "f1": 0.8333,
+          "support": 7
+        },
+        "cyberbullying": {
+          "precision": 0.8889,
+          "recall": 1.0,
+          "f1": 0.9412,
+          "support": 16
+        }
+      },
+      "implicitness_breakdown": {
+        "E0": {
+          "count": 11,
+          "correct": 9,
+          "accuracy": 0.8182,
+          "macro_f1": 0.8167
+        },
+        "E1": {
+          "count": 12,
+          "correct": 12,
+          "accuracy": 1.0,
+          "macro_f1": 1.0
+        }
+      },
+      "type_breakdown": {
+        "BSH": {
+          "count": 3,
+          "correct": 3,
+          "accuracy": 1.0
+        },
+        "INS": {
+          "count": 6,
+          "correct": 6,
+          "accuracy": 1.0
+        },
+        "NONE": {
+          "count": 7,
+          "correct": 5,
+          "accuracy": 0.7143
+        },
+        "SAR": {
+          "count": 4,
+          "correct": 4,
+          "accuracy": 1.0
+        },
+        "SEX": {
+          "count": 1,
+          "correct": 1,
+          "accuracy": 1.0
+        },
+        "SHM": {
+          "count": 2,
+          "correct": 2,
+          "accuracy": 1.0
+        }
+      },
+      "error_analysis": {
+        "false_positive_count": 2,
+        "false_negative_count": 0,
+        "false_positive_rate": 0.2857,
+        "false_negative_rate": 0.0,
+        "fp_samples": [
+          {
+            "text": "Congore adalah masalahnya",
+            "prob": 0.5394,
+            "implicit_level": "E0"
+          },
+          {
+            "text": "idungnya.. ????",
+            "prob": 0.6343,
+            "implicit_level": "E0"
+          }
+        ],
+        "fn_samples": []
       },
       "model_name": "E2. LLM Knowledge-Only Model (33D Contextual Cues)",
       "status": "evaluated_against_llm_pseudo_labels"
     },
     "model_c_hybrid_fusion": {
-      "threshold": 0.2,
-      "support": 5,
-      "accuracy": 0.8,
-      "macro_precision": 0.4,
-      "macro_recall": 0.5,
-      "macro_f1": 0.4444,
-      "weighted_precision": 0.64,
-      "weighted_recall": 0.8,
-      "weighted_f1": 0.7111,
-      "roc_auc": 0.0,
-      "pr_auc": 0.6792,
+      "threshold": 0.54,
+      "support": 23,
+      "accuracy": 0.5652,
+      "macro_precision": 0.4866,
+      "macro_recall": 0.4866,
+      "macro_f1": 0.4866,
+      "weighted_precision": 0.5652,
+      "weighted_recall": 0.5652,
+      "weighted_f1": 0.5652,
+      "roc_auc": 0.3929,
+      "pr_auc": 0.6389,
       "calibration": {
-        "ece": 0.5124,
-        "mce": 0.7711,
-        "brier_score": 0.2797,
-        "log_loss": 0.7706
+        "ece": 0.1534,
+        "mce": 0.3423,
+        "brier_score": 0.2428,
+        "log_loss": 0.6799
       },
       "confidence_intervals_95": {
         "accuracy": [
-          0.4,
-          1.0
+          0.3913,
+          0.7391
         ],
         "macro_f1": [
-          0.2857,
-          1.0
+          0.303,
+          0.6734
         ],
         "roc_auc": [
-          0.0,
-          0.0
+          0.13,
+          0.6776
         ],
         "pr_auc": [
-          0.325,
-          0.7625
+          0.4649,
+          0.9131
         ]
       },
       "confusion_matrix": {
-        "tn": 0,
-        "fp": 1,
-        "fn": 0,
-        "tp": 4
+        "tn": 2,
+        "fp": 5,
+        "fn": 5,
+        "tp": 11
       },
       "confusion_matrix_2x2": [
         [
-          0,
-          1
+          2,
+          5
         ],
         [
-          0,
-          4
+          5,
+          11
         ]
       ],
       "per_class": {
         "non_cyberbullying": {
-          "precision": 0.0,
-          "recall": 0.0,
-          "f1": 0.0,
-          "support": 1
+          "precision": 0.2857,
+          "recall": 0.2857,
+          "f1": 0.2857,
+          "support": 7
         },
         "cyberbullying": {
-          "precision": 0.8,
-          "recall": 1.0,
-          "f1": 0.8889,
-          "support": 4
+          "precision": 0.6875,
+          "recall": 0.6875,
+          "f1": 0.6875,
+          "support": 16
         }
       },
       "implicitness_breakdown": {
         "E0": {
-          "count": 3,
-          "correct": 2,
-          "accuracy": 0.6667,
-          "macro_f1": 0.4
+          "count": 11,
+          "correct": 5,
+          "accuracy": 0.4545,
+          "macro_f1": 0.45
         },
         "E1": {
-          "count": 2,
-          "correct": 2,
-          "accuracy": 1.0,
-          "macro_f1": 1.0
+          "count": 12,
+          "correct": 8,
+          "accuracy": 0.6667,
+          "macro_f1": 0.4
         }
       },
       "type_breakdown": {
+        "BSH": {
+          "count": 3,
+          "correct": 1,
+          "accuracy": 0.3333
+        },
         "INS": {
+          "count": 6,
+          "correct": 4,
+          "accuracy": 0.6667
+        },
+        "NONE": {
+          "count": 7,
+          "correct": 2,
+          "accuracy": 0.2857
+        },
+        "SAR": {
           "count": 4,
           "correct": 4,
           "accuracy": 1.0
         },
-        "NONE": {
+        "SEX": {
           "count": 1,
-          "correct": 0,
-          "accuracy": 0.0
+          "correct": 1,
+          "accuracy": 1.0
+        },
+        "SHM": {
+          "count": 2,
+          "correct": 1,
+          "accuracy": 0.5
         }
       },
       "error_analysis": {
-        "false_positive_count": 1,
-        "false_negative_count": 0,
-        "false_positive_rate": 1.0,
-        "false_negative_rate": 0.0,
+        "false_positive_count": 5,
+        "false_negative_count": 5,
+        "false_positive_rate": 0.7143,
+        "false_negative_rate": 0.3125,
         "fp_samples": [
           {
-            "text": "Kue Koncol",
-            "prob": 0.7711,
+            "text": "Beli alat gym aja kak",
+            "prob": 0.6491,
+            "implicit_level": "E0"
+          },
+          {
+            "text": "Jealorely",
+            "prob": 0.654,
+            "implicit_level": "E0"
+          },
+          {
+            "text": "manyunan kematian",
+            "prob": 0.5909,
+            "implicit_level": "E0"
+          },
+          {
+            "text": "senyum logo arsenal berkah",
+            "prob": 0.5954,
+            "implicit_level": "E0"
+          },
+          {
+            "text": "idungnya.. ????",
+            "prob": 0.7307,
             "implicit_level": "E0"
           }
         ],
-        "fn_samples": []
+        "fn_samples": [
+          {
+            "text": "malu ga si bang @user Wardani si paling tau jepang ?????????? baru mau kejepang udah bikin malu wkwkwkwkw",
+            "prob": 0.4473,
+            "implicit_level": "E1",
+            "type": "SHM"
+          },
+          {
+            "text": "maju lo semua yang bilang tasyi mirip Buzz, gua kan skrg tiap liat tasyi jadi bayangin Buzz",
+            "prob": 0.4575,
+            "implicit_level": "E1",
+            "type": "INS"
+          },
+          {
+            "text": "mon maap sejak kapan bright bibirny maju",
+            "prob": 0.4746,
+            "implicit_level": "E1",
+            "type": "BSH"
+          },
+          {
+            "text": "kok jadi gitu cokk mata nya",
+            "prob": 0.5374,
+            "implicit_level": "E1",
+            "type": "BSH"
+          },
+          {
+            "text": "dasar miskin",
+            "prob": 0.4365,
+            "implicit_level": "E0",
+            "type": "INS"
+          }
+        ]
       },
       "model_name": "E3. Full Hybrid Transformer-LLM Fusion",
       "fusion_mode": "gated",
       "ablation_mask_mode": "none",
-      "mean_gating_z": 0.4941,
+      "mean_gating_z": 0.4964,
       "multi_task_heads_test": {
         "type": {
-          "support": 5,
-          "accuracy": 0.2,
-          "macro_f1": 0.1667
+          "support": 23,
+          "accuracy": 0.3478,
+          "macro_f1": 0.1436
         },
         "emotion": {
-          "support": 5,
-          "accuracy": 0.4,
-          "macro_f1": 0.1905
+          "support": 23,
+          "accuracy": 0.6522,
+          "macro_f1": 0.3299
         },
         "cultural": {
-          "support": 5,
-          "accuracy": 0.2,
-          "macro_f1": 0.1111
+          "support": 23,
+          "accuracy": 0.3913,
+          "macro_f1": 0.1406
         },
         "implicit": {
-          "support": 5,
-          "accuracy": 0.4,
-          "macro_f1": 0.2667
+          "support": 23,
+          "accuracy": 0.6957,
+          "macro_f1": 0.6957
         },
         "severity": {
-          "support": 5,
-          "accuracy": 0.2,
-          "macro_f1": 0.1667
+          "support": 23,
+          "accuracy": 0.5217,
+          "macro_f1": 0.2724
         }
       }
     }

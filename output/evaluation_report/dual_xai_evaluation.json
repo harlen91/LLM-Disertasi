@@ -4,213 +4,326 @@
   "model_type": "hybrid",
   "target_source": "pseudo_labeled_llm",
   "llm_vector_conditioning": "active_33d_contextual_evidence",
-  "total_test_samples": 5,
+  "total_test_samples": 23,
   "scientific_faithfulness_metrics": {
-    "mean_comprehensiveness": 0.0144,
-    "samples_measured": 5
+    "mean_comprehensiveness": 0.0094,
+    "samples_measured": 20
   },
   "diagnostic_lexical_heuristics": {
     "disclaimer": "Metrik lexical overlap bersifat diagnostik heuristik, bukan ukuran validitas kausal tervalidasi.",
-    "mean_lexical_alignment_score": 50.0,
-    "lexical_alignment_rate_percentage": 60.0
+    "mean_lexical_alignment_score": 36.38,
+    "lexical_alignment_rate_percentage": 39.13
   },
   "implicitness_breakdown": {
     "E0": {
-      "count": 3,
-      "mean_diagnostic_lexical_alignment": 16.67,
-      "lexical_alignment_rate": 33.33,
-      "mean_comprehensiveness": 0.0397
+      "count": 11,
+      "mean_diagnostic_lexical_alignment": 29.09,
+      "lexical_alignment_rate": 27.27,
+      "mean_comprehensiveness": -0.009
     },
     "E1": {
-      "count": 2,
-      "mean_diagnostic_lexical_alignment": 100.0,
-      "lexical_alignment_rate": 100.0,
-      "mean_comprehensiveness": -0.0236
+      "count": 12,
+      "mean_diagnostic_lexical_alignment": 43.06,
+      "lexical_alignment_rate": 50.0,
+      "mean_comprehensiveness": 0.0217
     }
   },
   "global_feature_importance": {
-    "sample_count": 5,
+    "sample_count": 20,
     "top_global_tokens": [
       {
-        "token": "kue",
-        "mean_abs_shap": 0.1033,
+        "token": "selebgram",
+        "mean_abs_shap": 0.0942,
         "occurrences": 1
       },
       {
-        "token": "lumayan",
-        "mean_abs_shap": 0.0551,
+        "token": "dasar",
+        "mean_abs_shap": 0.0882,
         "occurrences": 1
       },
       {
-        "token": "di",
-        "mean_abs_shap": 0.0544,
+        "token": "miskin",
+        "mean_abs_shap": 0.0871,
         "occurrences": 1
       },
       {
-        "token": "k",
-        "mean_abs_shap": 0.0472,
+        "token": "alo",
+        "mean_abs_shap": 0.0792,
         "occurrences": 1
       },
       {
-        "token": "dan",
-        "mean_abs_shap": 0.0369,
+        "token": "kontol",
+        "mean_abs_shap": 0.0748,
         "occurrences": 1
       },
       {
-        "token": "norak",
-        "mean_abs_shap": 0.0323,
-        "occurrences": 2
-      },
-      {
-        "token": "konco",
-        "mean_abs_shap": 0.0313,
+        "token": "maap",
+        "mean_abs_shap": 0.0713,
         "occurrences": 1
       },
       {
-        "token": "bayu",
-        "mean_abs_shap": 0.0275,
-        "occurrences": 2
+        "token": "senyum",
+        "mean_abs_shap": 0.0702,
+        "occurrences": 3
       },
       {
-        "token": "urus",
-        "mean_abs_shap": 0.0254,
+        "token": "kaya",
+        "mean_abs_shap": 0.0697,
         "occurrences": 1
       },
       {
-        "token": "?",
-        "mean_abs_shap": 0.0208,
-        "occurrences": 4
-      },
-      {
-        "token": "tidak",
-        "mean_abs_shap": 0.0147,
+        "token": "mon",
+        "mean_abs_shap": 0.0688,
         "occurrences": 1
       },
       {
-        "token": "phobia",
-        "mean_abs_shap": 0.0145,
+        "token": "e",
+        "mean_abs_shap": 0.0671,
         "occurrences": 1
       },
       {
-        "token": "pasangan",
-        "mean_abs_shap": 0.0145,
+        "token": "mata",
+        "mean_abs_shap": 0.0614,
         "occurrences": 1
       },
       {
-        "token": "terlihat",
-        "mean_abs_shap": 0.0069,
+        "token": "berkah",
+        "mean_abs_shap": 0.0598,
         "occurrences": 1
       },
       {
-        "token": "okb",
-        "mean_abs_shap": 0.0056,
+        "token": "je",
+        "mean_abs_shap": 0.0596,
+        "occurrences": 1
+      },
+      {
+        "token": "adalah",
+        "mean_abs_shap": 0.0531,
+        "occurrences": 1
+      },
+      {
+        "token": "ny",
+        "mean_abs_shap": 0.051,
         "occurrences": 1
       }
     ],
     "top_global_llm_features": [
       {
+        "feature": "ctx_direct_addressee_target",
+        "mean_abs_shap": 0.0352
+      },
+      {
         "feature": "cult_status_hierarchy_cue",
-        "mean_abs_shap": 0.0367
-      },
-      {
-        "feature": "prag_presupposition_insinuation",
-        "mean_abs_shap": 0.0251
-      },
-      {
-        "feature": "emo_calm_neutral_register",
-        "mean_abs_shap": 0.0215
-      },
-      {
-        "feature": "ctx_teacher_confidence_raw",
-        "mean_abs_shap": 0.0153
-      },
-      {
-        "feature": "ctx_harm_impact_evidence",
-        "mean_abs_shap": 0.0102
-      },
-      {
-        "feature": "ling_rhetorical_punct",
-        "mean_abs_shap": 0.0101
-      },
-      {
-        "feature": "emo_hostility_aggression",
-        "mean_abs_shap": 0.008
-      },
-      {
-        "feature": "ling_derogatory_lexical",
-        "mean_abs_shap": 0.0078
-      },
-      {
-        "feature": "cult_appearance_norm_cue",
-        "mean_abs_shap": 0.0072
-      },
-      {
-        "feature": "emo_derision_ridicule",
-        "mean_abs_shap": 0.006
-      },
-      {
-        "feature": "ling_negation_litotes",
-        "mean_abs_shap": 0.0059
-      },
-      {
-        "feature": "ctx_provocation_reply",
-        "mean_abs_shap": 0.0054
-      },
-      {
-        "feature": "ling_metaphor_simile",
-        "mean_abs_shap": 0.0
-      },
-      {
-        "feature": "ling_elongation_emphasis",
-        "mean_abs_shap": 0.0
+        "mean_abs_shap": 0.0242
       },
       {
         "feature": "ling_slang_register",
-        "mean_abs_shap": 0.0
+        "mean_abs_shap": 0.0226
+      },
+      {
+        "feature": "ling_rhetorical_punct",
+        "mean_abs_shap": 0.0111
+      },
+      {
+        "feature": "ctx_provocation_reply",
+        "mean_abs_shap": 0.0099
+      },
+      {
+        "feature": "emo_derision_ridicule",
+        "mean_abs_shap": 0.009
+      },
+      {
+        "feature": "ling_second_person_target",
+        "mean_abs_shap": 0.0086
+      },
+      {
+        "feature": "ling_metaphor_simile",
+        "mean_abs_shap": 0.0065
+      },
+      {
+        "feature": "ctx_public_platform_stage",
+        "mean_abs_shap": 0.0055
+      },
+      {
+        "feature": "ctx_teacher_confidence_raw",
+        "mean_abs_shap": 0.0052
+      },
+      {
+        "feature": "cult_appearance_norm_cue",
+        "mean_abs_shap": 0.0046
+      },
+      {
+        "feature": "emo_hostility_aggression",
+        "mean_abs_shap": 0.0043
+      },
+      {
+        "feature": "ling_negation_litotes",
+        "mean_abs_shap": 0.0033
+      },
+      {
+        "feature": "ling_derogatory_lexical",
+        "mean_abs_shap": 0.0028
+      },
+      {
+        "feature": "prag_irony_sarcasm_signal",
+        "mean_abs_shap": 0.0022
       }
     ],
     "global_cue_families": {
-      "Linguistic": 0.0034,
-      "Cultural": 0.0063,
-      "Emotional": 0.0051,
-      "Pragmatic": 0.0042,
-      "Contextual": 0.0051
+      "Linguistic": 0.0078,
+      "Cultural": 0.0041,
+      "Emotional": 0.0021,
+      "Pragmatic": 0.0004,
+      "Contextual": 0.0093
     }
   },
   "detailed_sample_results": [
     {
       "idx": 0,
-      "comment": "phobia bayu",
-      "cyberbullying": "YES",
-      "implicit_level": "E1",
-      "type": "INS",
-      "cyberbullying_prob": 0.5756,
+      "comment": "Beli alat gym aja kak",
+      "cyberbullying": "NO",
+      "implicit_level": "E0",
+      "type": "NONE",
+      "cyberbullying_prob": 0.6491,
       "top_positive_shap_tokens": [
-        "bayu"
+        "aja",
+        "kakak"
       ],
       "top_negative_shap_tokens": [
-        "phobia"
+        "Beli",
+        "gym",
+        "alat"
       ],
-      "faithfulness_comprehensiveness": -0.0172,
-      "diagnostic_lexical_aligned_tokens": [
-        "bayu"
-      ],
-      "diagnostic_lexical_alignment_score": 100.0,
-      "is_lexically_aligned": true
+      "faithfulness_comprehensiveness": -0.0251,
+      "diagnostic_lexical_aligned_tokens": [],
+      "diagnostic_lexical_alignment_score": 0.0,
+      "is_lexically_aligned": false
     },
     {
       "idx": 1,
-      "comment": "pasangan norakk",
+      "comment": "Jealorely",
+      "cyberbullying": "NO",
+      "implicit_level": "E0",
+      "type": "NONE",
+      "cyberbullying_prob": 0.654,
+      "top_positive_shap_tokens": [
+        "Je",
+        "ly"
+      ],
+      "top_negative_shap_tokens": [
+        "alo",
+        "re"
+      ],
+      "faithfulness_comprehensiveness": 0.0,
+      "diagnostic_lexical_aligned_tokens": [],
+      "diagnostic_lexical_alignment_score": 0.0,
+      "is_lexically_aligned": false
+    },
+    {
+      "idx": 2,
+      "comment": "Congore adalah masalahnya",
+      "cyberbullying": "NO",
+      "implicit_level": "E0",
+      "type": "NONE",
+      "cyberbullying_prob": 0.4724,
+      "top_positive_shap_tokens": [],
+      "top_negative_shap_tokens": [
+        "e",
+        "adalah",
+        "masalahnya",
+        "Congor"
+      ],
+      "faithfulness_comprehensiveness": null,
+      "diagnostic_lexical_aligned_tokens": [],
+      "diagnostic_lexical_alignment_score": 0.0,
+      "is_lexically_aligned": false
+    },
+    {
+      "idx": 3,
+      "comment": "senyum logo arsenal wk",
+      "cyberbullying": "YES",
+      "implicit_level": "E1",
+      "type": "SAR",
+      "cyberbullying_prob": 0.6154,
+      "top_positive_shap_tokens": [
+        "wk"
+      ],
+      "top_negative_shap_tokens": [
+        "senyum",
+        "arsenal",
+        "logo"
+      ],
+      "faithfulness_comprehensiveness": -0.0112,
+      "diagnostic_lexical_aligned_tokens": [],
+      "diagnostic_lexical_alignment_score": 0.0,
+      "is_lexically_aligned": false
+    },
+    {
+      "idx": 4,
+      "comment": "senyuma lu mirip logo Arsenal",
+      "cyberbullying": "YES",
+      "implicit_level": "E1",
+      "type": "INS",
+      "cyberbullying_prob": 0.5691,
+      "top_positive_shap_tokens": [
+        "mirip",
+        "Arsenal"
+      ],
+      "top_negative_shap_tokens": [
+        "senyum",
+        "kamu",
+        "logo",
+        "a"
+      ],
+      "faithfulness_comprehensiveness": 0.0559,
+      "diagnostic_lexical_aligned_tokens": [
+        "Arsenal"
+      ],
+      "diagnostic_lexical_alignment_score": 50.0,
+      "is_lexically_aligned": true
+    },
+    {
+      "idx": 5,
+      "comment": "malu ga si bang @user Wardani si paling tau jepang ?????????? baru mau kejepang udah bikin malu wkwkwkwkw",
+      "cyberbullying": "YES",
+      "implicit_level": "E1",
+      "type": "SHM",
+      "cyberbullying_prob": 0.4473,
+      "top_positive_shap_tokens": [
+        "?",
+        "?",
+        "?",
+        "?",
+        "Ward"
+      ],
+      "top_negative_shap_tokens": [
+        "si",
+        "paling",
+        "?",
+        "tidak",
+        "si"
+      ],
+      "faithfulness_comprehensiveness": -0.0,
+      "diagnostic_lexical_aligned_tokens": [
+        "Ward"
+      ],
+      "diagnostic_lexical_alignment_score": 20.0,
+      "is_lexically_aligned": false
+    },
+    {
+      "idx": 6,
+      "comment": "Selebgram kere??",
       "cyberbullying": "YES",
       "implicit_level": "E0",
       "type": "INS",
-      "cyberbullying_prob": 0.5714,
+      "cyberbullying_prob": 0.5742,
       "top_positive_shap_tokens": [
-        "k"
+        "?"
       ],
       "top_negative_shap_tokens": [
-        "norak",
-        "pasangan"
+        "Selebgram",
+        "?",
+        "kere"
       ],
       "faithfulness_comprehensiveness": -0.0,
       "diagnostic_lexical_aligned_tokens": [],
@@ -218,72 +331,391 @@
       "is_lexically_aligned": false
     },
     {
-      "idx": 2,
-      "comment": "Kue Koncol",
-      "cyberbullying": "NO",
-      "implicit_level": "E0",
-      "type": "NONE",
-      "cyberbullying_prob": 0.7711,
-      "top_positive_shap_tokens": [
-        "Kue",
-        "l"
-      ],
-      "top_negative_shap_tokens": [
-        "Konco"
-      ],
-      "faithfulness_comprehensiveness": 0.0814,
-      "diagnostic_lexical_aligned_tokens": [
-        "Kue"
-      ],
-      "diagnostic_lexical_alignment_score": 50.0,
-      "is_lexically_aligned": true
-    },
-    {
-      "idx": 3,
-      "comment": "bayu terlihat tidak di urus",
+      "idx": 7,
+      "comment": "dih mukanya",
       "cyberbullying": "YES",
       "implicit_level": "E1",
-      "type": "INS",
-      "cyberbullying_prob": 0.5437,
+      "type": "BSH",
+      "cyberbullying_prob": 0.6339,
       "top_positive_shap_tokens": [
-        "urus",
-        "tidak"
+        "dih"
       ],
       "top_negative_shap_tokens": [
-        "di",
-        "bayu",
-        "terlihat"
+        "mukanya"
       ],
-      "faithfulness_comprehensiveness": -0.03,
+      "faithfulness_comprehensiveness": -0.0023,
       "diagnostic_lexical_aligned_tokens": [
-        "urus",
-        "tidak"
+        "dih"
       ],
       "diagnostic_lexical_alignment_score": 100.0,
       "is_lexically_aligned": true
     },
     {
-      "idx": 4,
+      "idx": 8,
+      "comment": "Jangan lupa mandi",
+      "cyberbullying": "NO",
+      "implicit_level": "E0",
+      "type": "NONE",
+      "cyberbullying_prob": 0.5073,
+      "top_positive_shap_tokens": [],
+      "top_negative_shap_tokens": [
+        "mandi",
+        "Jangan",
+        "lupa"
+      ],
+      "faithfulness_comprehensiveness": null,
+      "diagnostic_lexical_aligned_tokens": [],
+      "diagnostic_lexical_alignment_score": 0.0,
+      "is_lexically_aligned": false
+    },
+    {
+      "idx": 9,
+      "comment": "maju lo semua yang bilang tasyi mirip Buzz, gua kan skrg tiap liat tasyi jadi bayangin Buzz",
+      "cyberbullying": "YES",
+      "implicit_level": "E1",
+      "type": "INS",
+      "cyberbullying_prob": 0.4575,
+      "top_positive_shap_tokens": [
+        "kan",
+        "liat",
+        "yang",
+        "bilang",
+        "saya"
+      ],
+      "top_negative_shap_tokens": [
+        "kamu",
+        "maju",
+        "semua",
+        "tas",
+        "yi"
+      ],
+      "faithfulness_comprehensiveness": 0.0404,
+      "diagnostic_lexical_aligned_tokens": [],
+      "diagnostic_lexical_alignment_score": 0.0,
+      "is_lexically_aligned": false
+    },
+    {
+      "idx": 10,
+      "comment": "Wajah kue kontol Anda",
+      "cyberbullying": "YES",
+      "implicit_level": "E0",
+      "type": "SEX",
+      "cyberbullying_prob": 0.6212,
+      "top_positive_shap_tokens": [
+        "Anda",
+        "kue"
+      ],
+      "top_negative_shap_tokens": [
+        "kontol",
+        "Wajah"
+      ],
+      "faithfulness_comprehensiveness": -0.0622,
+      "diagnostic_lexical_aligned_tokens": [
+        "Anda",
+        "kue"
+      ],
+      "diagnostic_lexical_alignment_score": 100.0,
+      "is_lexically_aligned": true
+    },
+    {
+      "idx": 11,
+      "comment": "mon maap sejak kapan bright bibirny maju",
+      "cyberbullying": "YES",
+      "implicit_level": "E1",
+      "type": "BSH",
+      "cyberbullying_prob": 0.4746,
+      "top_positive_shap_tokens": [
+        "bright",
+        "kapan",
+        "ny"
+      ],
+      "top_negative_shap_tokens": [
+        "maap",
+        "mon",
+        "sejak",
+        "bibir",
+        "maju"
+      ],
+      "faithfulness_comprehensiveness": 0.0199,
+      "diagnostic_lexical_aligned_tokens": [
+        "bright",
+        "kapan"
+      ],
+      "diagnostic_lexical_alignment_score": 66.7,
+      "is_lexically_aligned": true
+    },
+    {
+      "idx": 12,
+      "comment": "manyunan kematian",
+      "cyberbullying": "NO",
+      "implicit_level": "E0",
+      "type": "NONE",
+      "cyberbullying_prob": 0.5909,
+      "top_positive_shap_tokens": [
+        "kematian"
+      ],
+      "top_negative_shap_tokens": [
+        "unan",
+        "many"
+      ],
+      "faithfulness_comprehensiveness": 0.0415,
+      "diagnostic_lexical_aligned_tokens": [
+        "kematian"
+      ],
+      "diagnostic_lexical_alignment_score": 100.0,
+      "is_lexically_aligned": true
+    },
+    {
+      "idx": 13,
+      "comment": "kok jadi gitu cokk mata nya",
+      "cyberbullying": "YES",
+      "implicit_level": "E1",
+      "type": "BSH",
+      "cyberbullying_prob": 0.5374,
+      "top_positive_shap_tokens": [
+        "gitu",
+        "nya"
+      ],
+      "top_negative_shap_tokens": [
+        "mata",
+        "kok",
+        "k",
+        "jadi",
+        "cok"
+      ],
+      "faithfulness_comprehensiveness": 0.0738,
+      "diagnostic_lexical_aligned_tokens": [
+        "gitu",
+        "nya"
+      ],
+      "diagnostic_lexical_alignment_score": 100.0,
+      "is_lexically_aligned": true
+    },
+    {
+      "idx": 14,
       "comment": "lumayan okb dan norak ????",
       "cyberbullying": "YES",
       "implicit_level": "E0",
       "type": "INS",
-      "cyberbullying_prob": 0.5182,
+      "cyberbullying_prob": 0.5958,
       "top_positive_shap_tokens": [
-        "lumayan",
         "?",
         "?",
         "?",
-        "?"
+        "?",
+        "lumayan"
       ],
       "top_negative_shap_tokens": [
+        "dan",
         "norak",
-        "dan"
+        "okb"
       ],
-      "faithfulness_comprehensiveness": 0.0377,
+      "faithfulness_comprehensiveness": -0.0,
       "diagnostic_lexical_aligned_tokens": [],
       "diagnostic_lexical_alignment_score": 0.0,
       "is_lexically_aligned": false
+    },
+    {
+      "idx": 15,
+      "comment": "dari mulutnya udh bisa bikin orang gulung tikar??????",
+      "cyberbullying": "YES",
+      "implicit_level": "E1",
+      "type": "SAR",
+      "cyberbullying_prob": 0.717,
+      "top_positive_shap_tokens": [
+        "?",
+        "bisa",
+        "sudah",
+        "dari",
+        "bikin"
+      ],
+      "top_negative_shap_tokens": [
+        "?",
+        "mulutnya"
+      ],
+      "faithfulness_comprehensiveness": -0.0123,
+      "diagnostic_lexical_aligned_tokens": [],
+      "diagnostic_lexical_alignment_score": 0.0,
+      "is_lexically_aligned": false
+    },
+    {
+      "idx": 16,
+      "comment": "masnya butuh pengakuan kalo dia kaya ??",
+      "cyberbullying": "YES",
+      "implicit_level": "E1",
+      "type": "SAR",
+      "cyberbullying_prob": 0.588,
+      "top_positive_shap_tokens": [
+        "?",
+        "pengakuan",
+        "?",
+        "butuh"
+      ],
+      "top_negative_shap_tokens": [
+        "kaya",
+        "masnya",
+        "dia",
+        "kalau"
+      ],
+      "faithfulness_comprehensiveness": 0.0286,
+      "diagnostic_lexical_aligned_tokens": [],
+      "diagnostic_lexical_alignment_score": 0.0,
+      "is_lexically_aligned": false
+    },
+    {
+      "idx": 17,
+      "comment": "makin hari makin menjadi jadi logo Arsenal yang satu ini",
+      "cyberbullying": "YES",
+      "implicit_level": "E1",
+      "type": "SAR",
+      "cyberbullying_prob": 0.6149,
+      "top_positive_shap_tokens": [
+        "satu",
+        "logo",
+        "jadi",
+        "makin",
+        "makin"
+      ],
+      "top_negative_shap_tokens": [
+        "menjadi",
+        "hari",
+        "Arsenal",
+        "ini"
+      ],
+      "faithfulness_comprehensiveness": 0.0407,
+      "diagnostic_lexical_aligned_tokens": [
+        "logo",
+        "jadi",
+        "makin",
+        "makin"
+      ],
+      "diagnostic_lexical_alignment_score": 80.0,
+      "is_lexically_aligned": true
+    },
+    {
+      "idx": 18,
+      "comment": "senyum logo arsenal berkah",
+      "cyberbullying": "NO",
+      "implicit_level": "E0",
+      "type": "NONE",
+      "cyberbullying_prob": 0.5954,
+      "top_positive_shap_tokens": [
+        "berkah",
+        "arsenal"
+      ],
+      "top_negative_shap_tokens": [
+        "senyum",
+        "logo"
+      ],
+      "faithfulness_comprehensiveness": -0.0265,
+      "diagnostic_lexical_aligned_tokens": [
+        "berkah",
+        "arsenal"
+      ],
+      "diagnostic_lexical_alignment_score": 100.0,
+      "is_lexically_aligned": true
+    },
+    {
+      "idx": 19,
+      "comment": "dasar miskin",
+      "cyberbullying": "YES",
+      "implicit_level": "E0",
+      "type": "INS",
+      "cyberbullying_prob": 0.4365,
+      "top_positive_shap_tokens": [],
+      "top_negative_shap_tokens": [
+        "dasar",
+        "miskin"
+      ],
+      "faithfulness_comprehensiveness": null,
+      "diagnostic_lexical_aligned_tokens": [],
+      "diagnostic_lexical_alignment_score": 0.0,
+      "is_lexically_aligned": false
+    },
+    {
+      "idx": 20,
+      "comment": "idungnya.. ????",
+      "cyberbullying": "NO",
+      "implicit_level": "E0",
+      "type": "NONE",
+      "cyberbullying_prob": 0.7307,
+      "top_positive_shap_tokens": [
+        "?",
+        "?",
+        "nya",
+        ".",
+        "?"
+      ],
+      "top_negative_shap_tokens": [
+        "?",
+        "id",
+        "ung",
+        "."
+      ],
+      "faithfulness_comprehensiveness": -0.0,
+      "diagnostic_lexical_aligned_tokens": [
+        "nya"
+      ],
+      "diagnostic_lexical_alignment_score": 20.0,
+      "is_lexically_aligned": false
+    },
+    {
+      "idx": 21,
+      "comment": "malesin lamak2 ya liat @user Wardani mcam doi aja yg punya uang, org kagak!...gw biasa liburan k Eropa aja B aja...kalau mau bbagi info yg positif aja",
+      "cyberbullying": "YES",
+      "implicit_level": "E1",
+      "type": "SHM",
+      "cyberbullying_prob": 0.6331,
+      "top_positive_shap_tokens": [
+        "!",
+        "info",
+        "yang",
+        "positif",
+        "aja"
+      ],
+      "top_negative_shap_tokens": [
+        "kagak",
+        "orang",
+        "Eropa",
+        "aja",
+        "B"
+      ],
+      "faithfulness_comprehensiveness": 0.0144,
+      "diagnostic_lexical_aligned_tokens": [
+        "info",
+        "aja"
+      ],
+      "diagnostic_lexical_alignment_score": 40.0,
+      "is_lexically_aligned": false
+    },
+    {
+      "idx": 22,
+      "comment": "paling gabisa kalo soal soflens relaxa",
+      "cyberbullying": "YES",
+      "implicit_level": "E1",
+      "type": "INS",
+      "cyberbullying_prob": 0.6512,
+      "top_positive_shap_tokens": [
+        "len",
+        "gabisa",
+        "a",
+        "kalau",
+        "soal"
+      ],
+      "top_negative_shap_tokens": [
+        "paling",
+        "s",
+        "sof",
+        "relax"
+      ],
+      "faithfulness_comprehensiveness": 0.0122,
+      "diagnostic_lexical_aligned_tokens": [
+        "len",
+        "gabisa",
+        "soal"
+      ],
+      "diagnostic_lexical_alignment_score": 60.0,
+      "is_lexically_aligned": true
     }
   ]
 }

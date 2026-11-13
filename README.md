@@ -106,17 +106,18 @@ Implementasi berada pada `core/fusion_model.py`, `scripts/train_indobertweet.py`
    - **E4**: Hybrid without Cultural Knowledge (dimensi Cultural `[7:14]` dimask nol)
    - **E5**: Hybrid without Emotional Knowledge (dimensi Emotional `[14:21]` dimask nol)
    - **E6**: Hybrid without Gated Fusion (Concat Fusion Projection)
-3. **Hasil Empiris Aktual pada Checkpoint Terkurasi Saat Ini (`iicd-curated-8ee578088376`, 49 baris teranotasi LLM valid dari 1.508 baris mentah: 39 Train / 5 Val / 5 Test, `target_source = pseudo_labeled_llm`, 0 Cross-Split Overlap)**:
-   - **E1 (Transformer-Only)**: Accuracy = **80.00%**, Macro-F1 = **0.4444**, ROC-AUC = **0.0000**, PR-AUC = **0.6792**, Mean Gate $z = 0.4970$
-   - **E2 (LLM Knowledge-Only 33D)**: Accuracy = **80.00%**, Macro-F1 = **0.7619**, ROC-AUC = **1.0000**, PR-AUC = **1.0000**
-   - **E3 (Full Hybrid Gated Fusion, $\tau^*=0.20$ pada Val)**: Accuracy = **80.00%**, Macro-F1 = **0.4444**, PR-AUC = **0.6792**, Mean Gate $z = 0.4941$ (Multi-Task Head Acc pada Test: Type **20.00%**, Emotion **40.00%**, Cultural **20.00%**, Implicit **40.00%**, Severity **20.00%**)
-   - **E4 (Hybrid no Cultural)** & **E5 (Hybrid no Emotional)**: Accuracy = **80.00%**, Macro-F1 = **0.4444**, Mean Gate $z = 0.4943 / 0.4937$
-   - **E6 (Hybrid Concat, non-gated)**: Accuracy = **80.00%**, Macro-F1 = **0.4444**, ROC-AUC = **1.0000**, PR-AUC = **1.0000**
+3. **Hasil Empiris Aktual pada Checkpoint Terkurasi Saat Ini (`iicd-curated-b2a6c856eeee`, 226 baris teranotasi LLM valid dari 1.508 baris mentah: 180 Train / 23 Val / 23 Test, `target_source = pseudo_labeled_llm`, 0 Cross-Split Overlap)**:
+   - **E1 (Transformer-Only)**: Accuracy = **65.22%**, Macro-F1 = **0.3947**, ROC-AUC = **0.5089**, PR-AUC = **0.7191**, Mean Gate $z = 0.4902$
+   - **E2 (LLM Knowledge-Only 33D)**: Accuracy = **91.30%**, Macro-F1 = **0.8873**, ROC-AUC = **0.9777**, PR-AUC = **0.9891**
+   - **E3 (Full Hybrid Gated Fusion, $\tau^*=0.54$ pada Val)**: Accuracy = **56.52%**, Macro-F1 = **0.4866**, ROC-AUC = **0.3929**, PR-AUC = **0.6389**, Mean Gate $z = 0.4964$ (Macro-F1 naik **+0.0919** dibanding E1 baseline; Multi-Task Head Acc pada Test: Type **34.78%**, Emotion **65.22%**, Cultural **39.13%**, Implicit **69.57%**, Severity **52.17%**)
+   - **E4 (Hybrid no Cultural)**: Accuracy = **52.17%**, Macro-F1 = **0.4868**, Mean Gate $z = 0.4966$
+   - **E5 (Hybrid no Emotional)**: Accuracy = **60.87%**, Macro-F1 = **0.4623**, Mean Gate $z = 0.4988$
+   - **E6 (Hybrid Concat, non-gated)**: Accuracy = **52.17%**, Macro-F1 = **0.5217**, Mean Gate $z = 0.5000$
 4. **Dual Explainability & Cross-Modal Gate (`core/shap_explainer.py`, `scripts/evaluate_dual_xai.py`)**:
-   - Menggunakan `shap.Explainer(..., shap.maskers.Text)` untuk **Stream A (atribusi token)** dan `shap.Explainer` tabular untuk **Stream B (33D Contextual Cues + agregasi 5 Cue Families: Cultural 0.0063, Emotional 0.0051, Contextual 0.0051, Pragmatic 0.0042, Linguistic 0.0034)**.
-   - Mengukur **Faithfulness Comprehensiveness ($\Delta p$)** (5 sampel uji: Mean $\Delta p = 0.0144$) serta memisahkan **Diagnostik Lexical Overlap CoT** (50.0% / 60.0%) dari klaim validitas kausal.
+   - Menggunakan `shap.Explainer` berbasis KernelSHAP nyata untuk **Stream A (atribusi token)** dan **Stream B (33D Contextual Cues + agregasi 5 Cue Families: Contextual 0.0093, Linguistic 0.0078, Cultural 0.0041, Emotional 0.0021, Pragmatic 0.0004)**.
+   - Mengukur **Faithfulness Comprehensiveness ($\Delta p$)** (20 sampel uji: Mean $\Delta p = 0.0094$).
 5. **Non-GT Consistency & Sensitivity Suite (`scripts/evaluate_consistency.py`)**:
-   - Mengaudit distribusi kelas & *imbalance ratio*, aktivasi 5 keluarga cue Stream B (`nonzero_rate` 40%–100%), kesepakatan guru-murid (Cohen's $\kappa$ antara pseudo-label LLM vs prediksi 6-Head Hybrid Model), analisis FP/FN per `implicit_level`, serta *repeat-run Krippendorff $\alpha$* bila dijalankan dengan API SumoPod aktif.
+   - Mengaudit distribusi kelas & *imbalance ratio*, aktivasi 5 keluarga cue Stream B (`nonzero_rate` 4.3%–100%), kesepakatan guru-murid (Cohen's $\kappa$ antara pseudo-label LLM vs prediksi 6-Head Hybrid Model), analisis FP/FN per `implicit_level`, serta *repeat-run consistency* bila dijalankan dengan API SumoPod aktif.
 
 ---
 
@@ -207,7 +208,23 @@ iicd_annotation_app/
 
 ---
 
-## 8. Batasan Metodologis & Catatan Eksekusi Saat Ini
+## 8. Batasan Metodologis & Status Kesiapan Riset Saat Ini
 
-1. **Supervisi Pseudo-Label LLM (`pseudo_labeled_llm`)**: Seluruh pelatihan dan evaluasi pada penelitian ini menggunakan pseudo-label yang dihasilkan LLM SumoPod tanpa ketergantungan pada human ground truth. Metrik diukur sebagai kesepakatan serta konsistensi antara model hybrid dengan pseudo-label dan bukti kontekstual LLM.
-2. **Cakupan Anotasi Checkpoint Saat Ini**: Berkas `checkpoint_Dataset-Research.csv` saat ini berisi **1.508 baris mentah**, namun **49 baris** di antaranya memiliki anotasi LLM valid (39 Train / 5 Val / 5 Test) dan **1.459 baris** lainnya tercatat di `failed_annotations_log.json` karena belum teranotasi (`cyberbullying` kosong). Melengkapi batch annotation pada seluruh 1.508 baris lalu menjalankan ulang pipeline kurasi–pelatihan–evaluasi akan meningkatkan representativitas statistik split validasi dan uji (khususnya sub-kelas `E2` dan taksonomi minor `SAR`, `SHM`, `EXC`, `SEX`).
+1. **Supervisi Pseudo-Label LLM (`pseudo_labeled_llm`)**: Seluruh pelatihan dan evaluasi pada penelitian ini menggunakan pseudo-label yang dihasilkan LLM SumoPod (`deepseek-v4.1-flash:netra`) tanpa ketergantungan pada human ground truth. Metrik diukur sebagai kesepakatan serta konsistensi distilasi antara model hybrid dengan pseudo-label dan bukti kontekstual LLM.
+2. **Cakupan Anotasi Checkpoint Saat Ini**: Berkas `checkpoint_Dataset-Research.csv` saat ini berisi **1.508 baris mentah**, di mana **226 baris bersih** telah selesai dianotasi (180 Train / 23 Val / 23 Test) dan **1.278 baris** lainnya tercatat di `failed_annotations_log.json` karena berstatus `NaN` (belum teranotasi API).
+3. **Status Kesiapan Penelitian**: ⚠️ **NOT READY FOR FINAL RESEARCH VALIDATION**. Diperlukan kelengkapan anotasi pada sisa 1.278 baris sebelum hasil dapat dianggap sebagai kesimpulan validasi final disertasi (untuk memastikan seluruh kelas minoritas seperti `E2`, `EDU`, `THR`, `EXC` memiliki representasi uji yang memadai).
+
+---
+
+## 9. Dokumen Laporan Audit & Validasi Metodologi
+
+Dokumentasi lengkap hasil audit komprehensif, refactoring arsitektur, laporan pengujian, dan panduan reproduksibilitas tersedia pada berkas berikut:
+
+1. [docs/COMPREHENSIVE_AUDIT_REPORT.md](file:///Users/harlengilbertsimanullang/Documents/Disertasi/LLM-Augmented%20Explainable/iicd_annotation_app/docs/COMPREHENSIVE_AUDIT_REPORT.md): Laporan audit kondisi awal, akar masalah, intervensi perbaikan, dan analisis risiko.
+2. [docs/REFACTORING_CHANGELOG.md](file:///Users/harlengilbertsimanullang/Documents/Disertasi/LLM-Augmented%20Explainable/iicd_annotation_app/docs/REFACTORING_CHANGELOG.md): Catatan perubahan kode sumber pada 24 modul utama, alasan teknis, dan dampaknya.
+3. [docs/METHODOLOGY_VALIDATION_REPORT.md](file:///Users/harlengilbertsimanullang/Documents/Disertasi/LLM-Augmented%20Explainable/iicd_annotation_app/docs/METHODOLOGY_VALIDATION_REPORT.md): Validasi keselarasan metodologis, bukti matematis non-kebocoran target, dan formulasi masked loss.
+4. [output/evaluation_report/dataset_quality_report.md](file:///Users/harlengilbertsimanullang/Documents/Disertasi/LLM-Augmented%20Explainable/iicd_annotation_app/output/evaluation_report/dataset_quality_report.md): Audit kualitas dataset 1.508 mentah vs 226 terkurasi, distribusi 6 head, dan log kegagalan.
+5. [output/evaluation_report/final_model_evaluation_report.md](file:///Users/harlengilbertsimanullang/Documents/Disertasi/LLM-Augmented%20Explainable/iicd_annotation_app/output/evaluation_report/final_model_evaluation_report.md): Evaluasi empiris E1–E6 pada split identik, matriks konfusi, kalibrasi ECE, dan analisis kesalahan.
+6. [output/evaluation_report/final_xai_evaluation_report.md](file:///Users/harlengilbertsimanullang/Documents/Disertasi/LLM-Augmented%20Explainable/iicd_annotation_app/output/evaluation_report/final_xai_evaluation_report.md): Evaluasi Real SHAP Dual-Modality, analisis 5 cue families, metrik fidelitas, dan penafian kausal.
+7. [docs/REPRODUCIBILITY_GUIDE.md](file:///Users/harlengilbertsimanullang/Documents/Disertasi/LLM-Augmented%20Explainable/iicd_annotation_app/docs/REPRODUCIBILITY_GUIDE.md): Panduan instalasi, konfigurasi API SumoPod, eksekusi CLI ujung-ke-ujung, dan inferensi Python.
+8. [docs/AUTOMATED_TEST_REPORT.md](file:///Users/harlengilbertsimanullang/Documents/Disertasi/LLM-Augmented%20Explainable/iicd_annotation_app/docs/AUTOMATED_TEST_REPORT.md): Bukti eksekusi 24 kasus uji (TEST 1–TEST 15) dengan tingkat keberhasilan 100% (24 passed).

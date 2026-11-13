@@ -14,6 +14,7 @@ def _failed_parse_record(explanation: str, error: str) -> Dict[str, Any]:
         "severity": MISSING_LABEL,
         "confidence": None,
         "explanation": explanation,
+        "contextual_cues": {"linguistic": {}, "cultural": {}, "emotional": {}, "pragmatic": {}, "contextual": {}},
         "error": error,
     }
 
@@ -88,6 +89,14 @@ def extract_json_from_response(output: str) -> Dict[str, Any]:
             fallback[f] = val.strip().strip('"')
         else:
             fallback[f] = ""
+
+    # Regex extraction for nested contextual_cues if present
+    cues_match = re.search(r'"contextual_cues"\s*:\s*(\{[\s\S]*?\})', json_str)
+    if cues_match:
+        try:
+            fallback["contextual_cues"] = json.loads(cues_match.group(1))
+        except Exception:
+            pass
 
     # If key fields are extracted, sanitize and return
     if any(fallback.get(k) for k in ["cyberbullying", "type", "confidence", "explanation"]):
